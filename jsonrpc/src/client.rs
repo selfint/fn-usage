@@ -1,11 +1,9 @@
+use crate::types::{Notification, Request, Response};
 use anyhow::{Context, Result};
 use serde::{de::DeserializeOwned, Serialize};
-
-use tokio::sync::watch;
-
-use crate::types::{Notification, Request, Response};
 use serde_json::Value;
 use std::sync::mpsc;
+use tokio::sync::watch;
 
 pub struct Client {
     client_tx: mpsc::Sender<String>,
