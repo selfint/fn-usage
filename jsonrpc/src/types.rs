@@ -1,27 +1,27 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(untagged)]
-pub enum Request<T> {
-    Request {
-        jsonrpc: String,
-        method: String,
-        params: Option<T>,
-        id: i32,
-    },
-    Notification {
-        jsonrpc: String,
-        method: String,
-        params: Option<T>,
-    },
+pub struct Request<Params> {
+    pub jsonrpc: String,
+    pub method: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub params: Option<Params>,
+    pub id: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Notification<Params> {
+    pub jsonrpc: String,
+    pub method: String,
+    pub params: Option<Params>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Response<T, E> {
-    jsonrpc: String,
+    pub jsonrpc: String,
     #[serde(flatten)]
-    result: JsonRpcResult<T, E>,
-    id: Option<i32>,
+    pub result: JsonRpcResult<T, E>,
+    pub id: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -29,7 +29,7 @@ pub struct Response<T, E> {
 pub enum JsonRpcResult<T, E> {
     Result(T),
     Error {
-        code: i32,
+        code: i64,
         message: String,
         data: Option<E>,
     },
@@ -42,22 +42,13 @@ mod tests {
     #[test]
     fn test_request_serialization() {
         insta::assert_compact_json_snapshot!(
-            Request::Request {
+            Request {
                 jsonrpc: "2.0".to_string(),
                 method: "method".to_string(),
                 params: Some(vec![42, 23]),
                 id: 1,
             },
             @r###"{"jsonrpc": "2.0", "method": "method", "params": [42, 23], "id": 1}"###
-        );
-
-        insta::assert_compact_json_snapshot!(
-            Request::Notification {
-                jsonrpc: "2.0".to_string(),
-                method: "method".to_string(),
-                params: Some(vec![42, 23]),
-            },
-            @r###"{"jsonrpc": "2.0", "method": "method", "params": [42, 23]}"###
         );
     }
 
@@ -81,9 +72,24 @@ mod tests {
         )
         "###
         );
+    }
 
+    #[test]
+    fn test_notification_serialization() {
+        insta::assert_compact_json_snapshot!(
+            Notification {
+                jsonrpc: "2.0".to_string(),
+                method: "method".to_string(),
+                params: Some(vec![42, 23]),
+            },
+            @r###"{"jsonrpc": "2.0", "method": "method", "params": [42, 23]}"###
+        );
+    }
+
+    #[test]
+    fn test_notification_deserialization() {
         insta::assert_debug_snapshot!(
-            serde_json::from_str::<Request<Vec<i32>>>(r#"{"jsonrpc": "2.0", "method": "method", "params": [42, 23]}"#),
+            serde_json::from_str::<Notification<Vec<i32>>>(r#"{"jsonrpc": "2.0", "method": "method", "params": [42, 23]}"#),
             @r###"
         Ok(
             Notification {
