@@ -1,2 +1,3 @@
 # fn-usage
- Language-agnostic linter for displaying function usage percentage.
+
+Language-agnostic linter for displaying function usage percentage.
