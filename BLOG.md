@@ -24,7 +24,7 @@ We will build 3 separate projects (_crates_ in Rust terms):
 
 1. JSON-RPC types: A library containing types definitions as specified in the [JSON-RPC 2.0 spec](https://www.jsonrpc.org/specification).
 
-2. LSP-client: A library for communicating with LSP servers, designed in the [sans-io](https://youtu.be/7cC3_jGwl_U) pattern.
+2. LSP Client: A library for communicating with LSP servers, designed in the [sans-io](https://youtu.be/7cC3_jGwl_U) pattern.
 
 3. fn-usage: Our linter executable. It will receive the full path to the target codebase, and a command to run that starts the appropriate LSP server. The output will be a json containing all the functions inside the codebase, and their "usage".
 
@@ -38,9 +38,40 @@ We will build 3 separate projects (_crates_ in Rust terms):
    }
    ```
 
-## JSON-RPC types
+Let's setup the workspace:
 
-While there are other implementations of JSON-RPC already, they are a bit too complicated for this project.
+```sh
+$ cd /path/to/fn-usage/dir
+$ touch Cargo.toml
+```
+
+And inside the `Cargo.toml` file:
+
+```toml
+[workspace]
+members = []
+```
+
+## 1. JSON-RPC types
+
+While there are other implementations of JSON-RPC types already, they are a bit too complicated for this project.
+
+Setup the crate inside our workspace:
+
+```sh
+$ cargo new --lib jsonrpc-types
+```
+
+And inside the root `Cargo.toml` file:
+
+```toml
+[workspace]
+members = [
+    "jsonrpc-types"
+]
+```
+
+Run `cargo test` to make sure everything works.
 
 Our implementation will be very simple:
 
@@ -90,3 +121,30 @@ pub enum JsonRpcResult<T, E> {
     },
 }
 ```
+
+That's all. All the code is inside the `lib.rs` file.
+
+> While writing the definitions, I used the [insta](https://github.com/mitsuhiko/insta) library for writing the tests. You can view the tests [here](https://github.com/selfint/fn-usage/blob/7a117e281b4861b97bf2e5913b5cb9b9ee25a2da/jsonrpc-types/src/lib.rs#L39).
+
+## 2. LSP Client
+
+Our LSP client is really just a JSON-RPC client, that only sends LSP messages.
+For the LSP types, we will use the [lsp-types](https://github.com/gluon-lang/lsp-types) crate.
+
+Setup the crate inside our workspace:
+
+```sh
+$ cargo new --lib lsp-client
+```
+
+And inside the root `Cargo.toml` file:
+
+```toml
+[workspace]
+members = [
+    "jsonrpc-types",
+    "lsp-client"
+]
+```
+
+Run `cargo test` again to make sure everything works.
