@@ -1,4 +1,2 @@
 [workspace]
-members = [
-    "jsonrpc-types"
-]
+members = ["jsonrpc", "lsp-client"]
