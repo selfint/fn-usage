@@ -1,8 +1,12 @@
-use jsonrpc::types::{JsonRpcResult, Response};
-use jsonrpc::{client::Client, types::Request};
+use jsonrpc::{
+    client::Client,
+    types::{JsonRpcResult, Request, Response},
+};
 use std::sync::mpsc;
-use tokio::join;
-use tokio::sync::{oneshot, watch};
+use tokio::{
+    join,
+    sync::{oneshot, watch},
+};
 
 macro_rules! jsonrpc_server {
     {
