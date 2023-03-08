@@ -1,98 +1,58 @@
 use anyhow::{Context, Result};
 use serde::{de::DeserializeOwned, Serialize};
-use tokio::sync::oneshot;
+
+use tokio::sync::watch;
 
 use crate::types::{Notification, Request, Response};
 use serde_json::Value;
-use std::{
-    collections::HashMap,
-    sync::{
-        mpsc::{Receiver, Sender},
-        Arc, Mutex,
-    },
-    thread::JoinHandle,
-};
+use std::sync::mpsc;
 
 pub struct Client {
-    client_tx: Sender<String>,
-    pending_responses: Arc<Mutex<HashMap<i64, oneshot::Sender<Value>>>>,
-    handle: JoinHandle<()>,
-    kill_thread_tx: Sender<()>,
-}
-
-impl Drop for Client {
-    fn drop(&mut self) {
-        self.kill_thread_tx
-            .send(())
-            .expect("failed to send kill signal");
-        while !self.handle.is_finished() {}
-    }
+    client_tx: mpsc::Sender<String>,
+    server_rx: watch::Receiver<String>,
 }
 
 impl Client {
-    pub fn new(client_tx: Sender<String>, server_rx: Receiver<String>) -> Self {
-        let pending_responses = Arc::new(Mutex::new(HashMap::<i64, oneshot::Sender<Value>>::new()));
-
-        let pending_responses_clone = pending_responses.clone();
-
-        let (kill_thread_tx, kill_thread_rx) = std::sync::mpsc::channel();
-        let handle = std::thread::spawn(move || loop {
-            if kill_thread_rx.try_recv().is_ok() {
-                break;
-            }
-
-            if let Ok(response) = server_rx.try_recv() {
-                let value = serde_json::from_str::<Value>(&response)
-                    .expect("failed to deserialize response");
-
-                let id = value
-                    .as_object()
-                    .expect("got non-object response")
-                    .get("id")
-                    .expect("got response without id")
-                    .as_i64()
-                    .expect("got non i64 id");
-
-                pending_responses_clone
-                    .lock()
-                    .expect("failed to acquire lock")
-                    .remove(&id)
-                    .expect("no pending response matching server response")
-                    .send(value)
-                    .expect("failed to send response to pending response");
-            }
-        });
-
+    pub fn new(client_tx: mpsc::Sender<String>, server_rx: watch::Receiver<String>) -> Self {
         Self {
             client_tx,
-            pending_responses,
-            handle,
-            kill_thread_tx,
+            server_rx,
         }
     }
 
-    pub async fn request<P, R, E>(&mut self, request: Request<P>) -> Result<Response<R, E>>
+    pub async fn request<P, R, E>(&self, request: Request<P>) -> Result<Response<R, E>>
     where
         P: Serialize,
         R: DeserializeOwned,
         E: DeserializeOwned,
     {
-        let (tx, rx) = oneshot::channel();
-
-        drop(
-            self.pending_responses
-                .lock()
-                .unwrap()
-                .insert(request.id, tx),
-        );
-
         self.client_tx
             .send(serde_json::to_string(&request).context("failed to serialize request")?)
             .context("failed to send request")?;
 
-        let response = rx.await.context("failed to await response")?;
+        let mut server_rx = self.server_rx.clone();
+        let response = loop {
+            server_rx.changed().await?;
 
-        serde_json::from_value::<Response<R, E>>(response).context("failed to parse response")
+            let msg = self.server_rx.borrow();
+            match serde_json::from_str::<Value>(&msg)
+                .context("failed to parse response as json")?
+                .as_object()
+                .and_then(|o| o.get("id"))
+                .and_then(|id| id.as_i64())
+            {
+                Some(id) if id == request.id => {
+                    break serde_json::from_value::<Response<R, E>>(
+                        serde_json::from_str::<Value>(&msg)
+                            .context("failed to parse response as json")?,
+                    )
+                    .context("failed to parse response as specific type")?;
+                }
+                _ => {}
+            };
+        };
+
+        Ok(response)
     }
 
     pub fn notify<P: Serialize>(&self, notification: Notification<P>) -> Result<()> {
