@@ -6,12 +6,18 @@ use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
-use tokio::sync::oneshot;
+use tokio::{
+    sync::{
+        mpsc::{UnboundedReceiver, UnboundedSender},
+        oneshot,
+    },
+    task::JoinHandle,
+};
 
 pub struct Client {
-    client_tx: tokio::sync::mpsc::UnboundedSender<String>,
+    client_tx: UnboundedSender<String>,
     pending_responses: Arc<Mutex<HashMap<i64, oneshot::Sender<Value>>>>,
-    handle: tokio::task::JoinHandle<()>,
+    handle: JoinHandle<()>,
 }
 
 impl Drop for Client {
@@ -22,12 +28,12 @@ impl Drop for Client {
 
 impl Client {
     pub fn new(
-        client_tx: tokio::sync::mpsc::UnboundedSender<String>,
-        mut server_rx: tokio::sync::mpsc::UnboundedReceiver<String>,
+        client_tx: UnboundedSender<String>,
+        mut server_rx: UnboundedReceiver<String>,
     ) -> Self {
-        let pending_responses = Arc::new(Mutex::new(HashMap::<i64, oneshot::Sender<Value>>::new()));
+        let pending_responses = Arc::new(Mutex::new(HashMap::<i64, oneshot::Sender<_>>::new()));
 
-        let pending_responses_clone = pending_responses.clone();
+        let pending_responses_clone = Arc::clone(&pending_responses);
 
         let handle = tokio::spawn(async move {
             while let Some(response) = server_rx.recv().await {
