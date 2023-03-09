@@ -7,7 +7,6 @@ use lsp_types::{
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
     process,
-    sync::oneshot,
 };
 
 fn start_rust_analyzer() -> process::Child {
