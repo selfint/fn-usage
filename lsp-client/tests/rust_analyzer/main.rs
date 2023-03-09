@@ -1,4 +1,4 @@
-use std::sync::mpsc;
+use std::{process::Stdio, sync::mpsc};
 
 use lsp_types::{
     notification::Initialized, request::Initialize, InitializeError, InitializeParams,
@@ -6,14 +6,15 @@ use lsp_types::{
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    process,
     sync::oneshot,
 };
 
-fn start_rust_analyzer() -> tokio::process::Child {
-    tokio::process::Command::new("rust-analyzer")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+fn start_rust_analyzer() -> process::Child {
+    process::Command::new("rust-analyzer")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
         .expect("failed to start rust analyzer")
 }
