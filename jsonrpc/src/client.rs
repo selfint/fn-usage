@@ -13,15 +13,11 @@ pub struct Client {
     client_tx: tokio::sync::mpsc::UnboundedSender<String>,
     pending_responses: Arc<Mutex<HashMap<i64, oneshot::Sender<Value>>>>,
     handle: tokio::task::JoinHandle<()>,
-    kill_thread_tx: std::sync::mpsc::Sender<()>,
 }
 
 impl Drop for Client {
     fn drop(&mut self) {
-        self.kill_thread_tx
-            .send(())
-            .expect("failed to send kill signal");
-        while !self.handle.is_finished() {}
+        self.handle.abort();
     }
 }
 
@@ -34,29 +30,28 @@ impl Client {
 
         let pending_responses_clone = pending_responses.clone();
 
-        let (kill_thread_tx, kill_thread_rx) = std::sync::mpsc::channel();
         let handle = tokio::spawn(async move {
-            while kill_thread_rx.try_recv().is_err() {
-                if let Some(response) = server_rx.recv().await {
-                    let value = serde_json::from_str::<Value>(&response)
-                        .expect("failed to deserialize response");
+            while let Some(response) = server_rx.recv().await {
+                let value = serde_json::from_str::<Value>(&response)
+                    .expect("failed to deserialize response");
 
-                    let id = value
-                        .as_object()
-                        .expect("got non-object response")
-                        .get("id")
-                        .expect("got response without id")
-                        .as_i64()
-                        .expect("got non i64 id");
+                let id = value
+                    .as_object()
+                    .expect("got non-object response")
+                    .get("id")
+                    .unwrap_or_else(|| panic!("got response without id: {:?}", value));
 
-                    pending_responses_clone
-                        .lock()
-                        .expect("failed to acquire lock")
-                        .remove(&id)
-                        .expect("no pending response matching server response")
-                        .send(value)
-                        .expect("failed to send response to pending response");
-                }
+                let id = id
+                    .as_i64()
+                    .unwrap_or_else(|| panic!("got non i64 id: {:?}", id));
+
+                pending_responses_clone
+                    .lock()
+                    .expect("failed to acquire lock")
+                    .remove(&id)
+                    .expect("no pending response matching server response")
+                    .send(value)
+                    .expect("failed to send response to pending response");
             }
         });
 
@@ -64,7 +59,6 @@ impl Client {
             client_tx,
             pending_responses,
             handle,
-            kill_thread_tx,
         }
     }
 

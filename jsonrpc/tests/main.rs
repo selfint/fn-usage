@@ -1,7 +1,8 @@
-use std::sync::mpsc::{Receiver, Sender};
-
 use jsonrpc::{client::Client, types::Request};
-use tokio::join;
+use tokio::{
+    join,
+    sync::mpsc::{UnboundedReceiver, UnboundedSender},
+};
 
 macro_rules! jsonrpc_server {
     {
@@ -39,46 +40,41 @@ macro_rules! build_request {
     };
 }
 
-fn fake_jsonrpc_server(
-    client_rx: Receiver<String>,
-    server_tx: Sender<String>,
-    kill_server_rx: Receiver<()>,
+async fn fake_jsonrpc_server(
+    mut client_rx: UnboundedReceiver<String>,
+    server_tx: UnboundedSender<String>,
 ) {
-    while kill_server_rx.try_recv().is_err() {
-        if let Ok(msg) = client_rx.try_recv() {
-            let response = jsonrpc_server! {
-                msg.replace(':', ": ").replace(',', ", ").as_ref(),
-                {
-                    --> r#"{"jsonrpc": "2.0", "method": "subtract", "params": [42, 23], "id": 1}"#
-                    <-- r#"{"jsonrpc": "2.0", "result": 19, "id": 1}"#
-                    --> r#"{"jsonrpc": "2.0", "method": "subtract", "params": [23, 42], "id": 2}"#
-                    <-- r#"{"jsonrpc": "2.0", "result": -19, "id": 2}"#
-                    --> r#"{"jsonrpc": "2.0", "method": "subtract", "params": {"subtrahend": 23, "minuend": 42}, "id": 3}"#
-                    <-- r#"{"jsonrpc": "2.0", "result": 19, "id": 3}"#
-                    --> r#"{"jsonrpc": "2.0", "method": "subtract", "params": {"subtrahend": 23, "minuend": 42}, "id": 4}"#
-                    <-- r#"{"jsonrpc": "2.0", "result": 19, "id": 4}"#
-                    --> r#"{"jsonrpc": "2.0", "method": "foobar", "id": 5}"#
-                    <-- r#"{"jsonrpc": "2.0", "error": {"code": -32601, "message": "Method not found"}, "id": 5}"#
-                    --> r#"{"jsonrpc": "2.0", "method": 1, "params": "bar"}"#
-                    <-- r#"{"jsonrpc": "2.0", "error": {"code": -32600, "message": "Invalid Request"}, "id": null}"#
-                }
-            };
+    while let Some(msg) = client_rx.recv().await {
+        let response = jsonrpc_server! {
+            msg.replace(':', ": ").replace(',', ", ").as_ref(),
+            {
+                --> r#"{"jsonrpc": "2.0", "method": "subtract", "params": [42, 23], "id": 1}"#
+                <-- r#"{"jsonrpc": "2.0", "result": 19, "id": 1}"#
+                --> r#"{"jsonrpc": "2.0", "method": "subtract", "params": [23, 42], "id": 2}"#
+                <-- r#"{"jsonrpc": "2.0", "result": -19, "id": 2}"#
+                --> r#"{"jsonrpc": "2.0", "method": "subtract", "params": {"subtrahend": 23, "minuend": 42}, "id": 3}"#
+                <-- r#"{"jsonrpc": "2.0", "result": 19, "id": 3}"#
+                --> r#"{"jsonrpc": "2.0", "method": "subtract", "params": {"subtrahend": 23, "minuend": 42}, "id": 4}"#
+                <-- r#"{"jsonrpc": "2.0", "result": 19, "id": 4}"#
+                --> r#"{"jsonrpc": "2.0", "method": "foobar", "id": 5}"#
+                <-- r#"{"jsonrpc": "2.0", "error": {"code": -32601, "message": "Method not found"}, "id": 5}"#
+                --> r#"{"jsonrpc": "2.0", "method": 1, "params": "bar"}"#
+                <-- r#"{"jsonrpc": "2.0", "error": {"code": -32600, "message": "Invalid Request"}, "id": null}"#
+            }
+        };
 
-            server_tx
-                .send(response.to_string())
-                .expect("failed to send response");
-        }
+        server_tx
+            .send(response.to_string())
+            .expect("failed to send response");
     }
 }
 
 #[tokio::test]
 async fn test_client() {
-    let (client_tx, client_rx) = std::sync::mpsc::channel::<String>();
-    let (server_tx, server_rx) = std::sync::mpsc::channel::<String>();
+    let (client_tx, client_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let (server_tx, server_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
-    let (kill_server_tx, kill_server_rx) = std::sync::mpsc::channel::<()>();
-    let server_handle =
-        std::thread::spawn(move || fake_jsonrpc_server(client_rx, server_tx, kill_server_rx));
+    let server_handle = tokio::spawn(fake_jsonrpc_server(client_rx, server_tx));
 
     let client = Client::new(client_tx, server_rx);
 
@@ -128,8 +124,5 @@ async fn test_client() {
     "###
     );
 
-    kill_server_tx
-        .send(())
-        .expect("failed to send kill signal to server");
-    server_handle.join().expect("failed to join server");
+    server_handle.abort();
 }
