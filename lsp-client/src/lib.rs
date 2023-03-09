@@ -1,3 +1,5 @@
+pub mod proxies;
+
 use anyhow::Result;
 use jsonrpc::{
     client::Client as JsonRpcClient,
