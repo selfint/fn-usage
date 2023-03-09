@@ -1,9 +1,9 @@
-use std::process::Stdio;
-
+use lsp_client::clients;
 use lsp_types::{
     notification::Initialized, request::Initialize, InitializeError, InitializeParams,
     InitializedParams,
 };
+use std::process::Stdio;
 use tokio::process::{Child, Command};
 
 fn start_rust_analyzer() -> Child {
@@ -23,7 +23,7 @@ async fn test_rust_analyzer() {
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
 
-    let (client, handles) = lsp_client::clients::stdio::stdio_client(stdin, stdout, stderr);
+    let (client, handles) = clients::stdio_client(stdin, stdout, stderr);
 
     let init_resp = client
         .request::<Initialize, InitializeError>(InitializeParams::default())

@@ -1,1 +1,3 @@
-pub mod stdio;
+mod stdio;
+
+pub use stdio::stdio_client;
