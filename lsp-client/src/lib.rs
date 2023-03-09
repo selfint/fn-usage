@@ -1,4 +1,4 @@
-pub mod proxies;
+pub mod clients;
 
 use anyhow::Result;
 use jsonrpc::{
@@ -15,28 +15,24 @@ use tokio::{
 
 pub struct Client {
     jsonrpc_client: JsonRpcClient,
-    request_id: AtomicI64,
-    handle: JoinHandle<()>,
+    request_id_counter: AtomicI64,
+    encoder_handle: JoinHandle<()>,
 }
 
 impl Drop for Client {
     fn drop(&mut self) {
-        self.handle.abort();
+        self.encoder_handle.abort();
     }
 }
 
 impl Client {
     pub fn new(client_tx: UnboundedSender<String>, server_rx: UnboundedReceiver<String>) -> Self {
         let (jsonrpc_client_tx, jsonrpc_client_rx) = unbounded_channel();
-        let jsonrpc_client = JsonRpcClient::new(jsonrpc_client_tx, server_rx);
 
-        let handle = tokio::spawn(Client::lsp_encode(jsonrpc_client_rx, client_tx));
-
-        let request_id = AtomicI64::new(0);
         Self {
-            jsonrpc_client,
-            request_id,
-            handle,
+            jsonrpc_client: JsonRpcClient::new(jsonrpc_client_tx, server_rx),
+            request_id_counter: AtomicI64::new(0),
+            encoder_handle: tokio::spawn(Client::lsp_encode(jsonrpc_client_rx, client_tx)),
         }
     }
 
@@ -58,7 +54,7 @@ impl Client {
                 jsonrpc: "2.0".to_string(),
                 method: R::METHOD.to_string(),
                 params: Some(params),
-                id: self.request_id.fetch_add(1, SeqCst),
+                id: self.request_id_counter.fetch_add(1, SeqCst),
             })
             .await
     }
