@@ -52,22 +52,22 @@ impl Client {
         response: String,
         pending_responses: &Mutex<HashMap<i64, oneshot::Sender<Value>>>,
     ) -> Result<()> {
-        let value =
-            serde_json::from_str::<Value>(&response).expect("failed to deserialize response");
+        let value = serde_json::from_str::<Value>(&response)
+            .context(format!("failed to deserialize response: {:?}", response))?;
 
         let id = value
             .as_object()
-            .context("got non-object response")?
+            .context(format!("got non-object response: {:?}", value))?
             .get("id")
             .context(format!("got response without id: {:?}", value))?;
 
-        let id = id.as_i64().context(format!("got non i64 id: {:?}", id))?;
+        let id = id.as_i64().context(format!("got non-i64 id: {:?}", id))?;
 
         pending_responses
             .lock()
             .expect("failed to acquire lock")
             .remove(&id)
-            .context("no pending response matching server response")?
+            .context(format!("response id has no pending response: {:?}", id))?
             .send(value)
             .map_err(anyhow::Error::msg)
             .context("failed to send response")

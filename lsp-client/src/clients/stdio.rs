@@ -5,7 +5,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use crate::Client;
+use crate::client::Client;
 
 pub fn stdio_client(
     mut stdin: ChildStdin,
