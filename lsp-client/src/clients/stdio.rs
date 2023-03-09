@@ -1,7 +1,9 @@
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
-use tokio::process::{ChildStderr, ChildStdin, ChildStdout};
-use tokio::task::JoinHandle;
-use tokio::{io::BufReader, sync::mpsc::UnboundedSender};
+use tokio::{
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    process::{ChildStderr, ChildStdin, ChildStdout},
+    sync::mpsc::{unbounded_channel, UnboundedSender},
+    task::JoinHandle,
+};
 
 use crate::Client;
 
@@ -10,8 +12,8 @@ pub fn stdio_client(
     stdout: ChildStdout,
     stderr: ChildStderr,
 ) -> (Client, Vec<JoinHandle<()>>) {
-    let (client_tx, mut client_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-    let (server_tx, server_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let (client_tx, mut client_rx) = unbounded_channel::<String>();
+    let (server_tx, server_rx) = unbounded_channel::<String>();
 
     let server_input_handle = tokio::spawn(async move {
         while let Some(msg) = client_rx.recv().await {

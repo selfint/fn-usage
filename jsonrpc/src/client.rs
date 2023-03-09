@@ -1,13 +1,12 @@
+use crate::types::{Notification, Request, Response};
 use anyhow::{Context, Result};
 use serde::{de::DeserializeOwned, Serialize};
-use tokio::sync::oneshot;
-
-use crate::types::{Notification, Request, Response};
 use serde_json::Value;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
+use tokio::sync::oneshot;
 
 pub struct Client {
     client_tx: tokio::sync::mpsc::UnboundedSender<String>,
