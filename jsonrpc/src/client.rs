@@ -17,12 +17,12 @@ use tokio::{
 pub struct Client {
     client_tx: UnboundedSender<String>,
     pending_responses: Arc<Mutex<HashMap<i64, oneshot::Sender<Value>>>>,
-    handle: JoinHandle<()>,
+    response_resolver_handle: JoinHandle<()>,
 }
 
 impl Drop for Client {
     fn drop(&mut self) {
-        self.handle.abort();
+        self.response_resolver_handle.abort();
     }
 }
 
@@ -32,39 +32,45 @@ impl Client {
         mut server_rx: UnboundedReceiver<String>,
     ) -> Self {
         let pending_responses = Arc::new(Mutex::new(HashMap::<i64, oneshot::Sender<_>>::new()));
-
         let pending_responses_clone = Arc::clone(&pending_responses);
 
-        let handle = tokio::spawn(async move {
+        let response_resolver_handle = tokio::spawn(async move {
             while let Some(response) = server_rx.recv().await {
-                let value = serde_json::from_str::<Value>(&response)
-                    .expect("failed to deserialize response");
-
-                let id = value
-                    .as_object()
-                    .expect("got non-object response")
-                    .get("id")
-                    .unwrap_or_else(|| panic!("got response without id: {:?}", value));
-
-                let id = id
-                    .as_i64()
-                    .unwrap_or_else(|| panic!("got non i64 id: {:?}", id));
-
-                pending_responses_clone
-                    .lock()
-                    .expect("failed to acquire lock")
-                    .remove(&id)
-                    .expect("no pending response matching server response")
-                    .send(value)
-                    .expect("failed to send response to pending response");
+                Client::handle_response(response, &pending_responses_clone)
+                    .expect("failed to handle response");
             }
         });
 
         Self {
             client_tx,
             pending_responses,
-            handle,
+            response_resolver_handle,
         }
+    }
+
+    fn handle_response(
+        response: String,
+        pending_responses: &Mutex<HashMap<i64, oneshot::Sender<Value>>>,
+    ) -> Result<()> {
+        let value =
+            serde_json::from_str::<Value>(&response).expect("failed to deserialize response");
+
+        let id = value
+            .as_object()
+            .context("got non-object response")?
+            .get("id")
+            .context(format!("got response without id: {:?}", value))?;
+
+        let id = id.as_i64().context(format!("got non i64 id: {:?}", id))?;
+
+        pending_responses
+            .lock()
+            .expect("failed to acquire lock")
+            .remove(&id)
+            .context("no pending response matching server response")?
+            .send(value)
+            .map_err(anyhow::Error::msg)
+            .context("failed to send response")
     }
 
     pub async fn request<P, R, E>(&self, request: Request<P>) -> Result<Response<R, E>>
