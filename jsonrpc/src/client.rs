@@ -62,11 +62,7 @@ impl Client {
         }
     }
 
-    pub async fn request<P, R, E>(
-        &self,
-        request: Request<P>,
-        add_header: bool,
-    ) -> Result<Response<R, E>>
+    pub async fn request<P, R, E>(&self, request: Request<P>) -> Result<Response<R, E>>
     where
         P: Serialize,
         R: DeserializeOwned,
@@ -81,13 +77,7 @@ impl Client {
                 .insert(request.id, response_tx),
         );
 
-        let mut request_str =
-            serde_json::to_string(&request).context("failed to serialize request")?;
-
-        if add_header {
-            let length = request_str.as_bytes().len();
-            request_str = format!("Content-Length: {}\r\n\r\n{}", length, request_str);
-        }
+        let request_str = serde_json::to_string(&request).context("failed to serialize request")?;
 
         self.client_tx
             .send(request_str)
@@ -97,18 +87,9 @@ impl Client {
         serde_json::from_value::<Response<R, E>>(response).context("failed to parse response")
     }
 
-    pub fn notify<P: Serialize>(
-        &self,
-        notification: Notification<P>,
-        add_header: bool,
-    ) -> Result<()> {
-        let mut notification_str =
+    pub fn notify<P: Serialize>(&self, notification: Notification<P>) -> Result<()> {
+        let notification_str =
             serde_json::to_string(&notification).context("failed to serialize notification")?;
-
-        if add_header {
-            let length = notification_str.as_bytes().len();
-            notification_str = format!("Content-Length: {}\r\n\r\n{}", length, notification_str);
-        }
 
         self.client_tx
             .send(notification_str)

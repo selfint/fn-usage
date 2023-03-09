@@ -81,11 +81,11 @@ async fn test_client() {
     macro_rules! test_request {
         ($params:ty, $result:ty, $error:ty, $($request:tt)*) => {
             client
-                .request::<$params, $result, $error>(build_request!($($request)*), false)
+                .request::<$params, $result, $error>(build_request!($($request)*))
         };
         ($result:ty, $error:ty, $($request:tt)*) => {
             client
-                .request::<_, $result, $error>(build_request!($($request)*), false)
+                .request::<_, $result, $error>(build_request!($($request)*))
         };
     }
 
