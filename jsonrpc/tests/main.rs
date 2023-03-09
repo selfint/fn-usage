@@ -1,12 +1,7 @@
-use jsonrpc::{
-    client::Client,
-    types::{JsonRpcResult, Request, Response},
-};
-use std::sync::mpsc;
-use tokio::{
-    join,
-    sync::{oneshot, watch},
-};
+use std::sync::mpsc::{Receiver, Sender};
+
+use jsonrpc::{client::Client, types::Request};
+use tokio::join;
 
 macro_rules! jsonrpc_server {
     {
@@ -45,9 +40,9 @@ macro_rules! build_request {
 }
 
 fn fake_jsonrpc_server(
-    client_rx: mpsc::Receiver<String>,
-    server_tx: watch::Sender<String>,
-    mut kill_server_rx: oneshot::Receiver<()>,
+    client_rx: Receiver<String>,
+    server_tx: Sender<String>,
+    kill_server_rx: Receiver<()>,
 ) {
     while kill_server_rx.try_recv().is_err() {
         if let Ok(msg) = client_rx.try_recv() {
@@ -77,11 +72,11 @@ fn fake_jsonrpc_server(
 }
 
 #[tokio::test]
-async fn test_server() {
+async fn test_client() {
     let (client_tx, client_rx) = std::sync::mpsc::channel::<String>();
-    let (server_tx, server_rx) = watch::channel::<String>("hello".to_string());
+    let (server_tx, server_rx) = std::sync::mpsc::channel::<String>();
 
-    let (kill_server_tx, kill_server_rx) = oneshot::channel::<()>();
+    let (kill_server_tx, kill_server_rx) = std::sync::mpsc::channel::<()>();
     let server_handle =
         std::thread::spawn(move || fake_jsonrpc_server(client_rx, server_tx, kill_server_rx));
 
@@ -89,18 +84,12 @@ async fn test_server() {
 
     macro_rules! test_request {
         ($params:ty, $result:ty, $error:ty, $($request:tt)*) => {
-            insta::assert_debug_snapshot!(
-                client
-                    .request::<$params, $result, $error>(build_request!($($request)*))
-                    .await
-            );
+            client
+                .request::<$params, $result, $error>(build_request!($($request)*))
         };
         ($result:ty, $error:ty, $($request:tt)*) => {
-            insta::assert_debug_snapshot!(
-                client
-                    .request::<_, $result, $error>(build_request!($($request)*))
-                    .await
-            );
+            client
+                .request::<_, $result, $error>(build_request!($($request)*))
         };
     }
 
@@ -110,92 +99,32 @@ async fn test_server() {
         minuend: i64,
     }
 
-    test_request!(i64, (), {"jsonrpc": "2.0", "method": "subtract", "params": [42, 23], "id": 1});
-    test_request!(i64, (), {"jsonrpc": "2.0", "method": "subtract", "params": [42, 23], "id": 1});
-    test_request!(i64, (), {"jsonrpc": "2.0", "method": "subtract", "params": [23, 42], "id": 2});
-    test_request!(i64, (), {"jsonrpc": "2.0", "method": "subtract", "params": Params {subtrahend: 23, minuend: 42}, "id": 3});
-    test_request!(i64, (), {"jsonrpc": "2.0", "method": "subtract", "params": Params {minuend: 42, subtrahend: 23}, "id": 4});
-    test_request!((), i64, (), {"jsonrpc": "2.0", "method": "foobar", "id": 5});
+    let f1 = test_request!(i64, (), {"jsonrpc": "2.0", "method": "subtract", "params": [42, 23], "id": 1});
+    let f2 = test_request!(i64, (), {"jsonrpc": "2.0", "method": "subtract", "params": [23, 42], "id": 2});
+    let f3 = test_request!(i64, (), {"jsonrpc": "2.0", "method": "subtract", "params": Params {subtrahend: 23, minuend: 42}, "id": 3});
+    let f4 = test_request!(i64, (), {"jsonrpc": "2.0", "method": "subtract", "params": Params {minuend: 42, subtrahend: 23}, "id": 4});
+    let f5 = test_request!((), i64, (), {"jsonrpc": "2.0", "method": "foobar", "id": 5});
 
-    kill_server_tx
-        .send(())
-        .expect("failed to send kill signal to server");
-    server_handle.join().expect("failed to join server");
-}
+    let (f1, f2, f3, f4, f5) = join!(f1, f2, f3, f4, f5);
+    let mut results = [
+        serde_json::to_string(&f1.unwrap()).unwrap(),
+        serde_json::to_string(&f2.unwrap()).unwrap(),
+        serde_json::to_string(&f3.unwrap()).unwrap(),
+        serde_json::to_string(&f4.unwrap()).unwrap(),
+        serde_json::to_string(&f5.unwrap()).unwrap(),
+    ];
 
-#[tokio::test]
-async fn test_concurrent_requests() {
-    let (client_tx, client_rx) = std::sync::mpsc::channel::<String>();
-    let (server_tx, server_rx) = watch::channel::<String>("hello".to_string());
+    results.sort();
 
-    let (kill_server_tx, mut kill_server_rx) = oneshot::channel::<()>();
-    let server_handle = std::thread::spawn(move || {
-        while kill_server_rx.try_recv().is_err() {
-            if let Ok(msg) = client_rx.try_recv() {
-                let request = serde_json::from_str::<Request<[i32; 1]>>(&msg)
-                    .expect("failed to parse request");
-
-                let response = Response {
-                    jsonrpc: "2.0".to_string(),
-                    result: JsonRpcResult::<_, ()>::Result(request.params.unwrap()[0]),
-                    id: Some(request.id),
-                };
-
-                server_tx
-                    .send(serde_json::to_string(&response).expect("failed to serialize response"))
-                    .expect("failed to send response");
-            }
-        }
-    });
-
-    let client = Client::new(client_tx, server_rx);
-
-    let req1 = client.request::<_, i64, ()>(Request {
-        jsonrpc: "2.0".to_string(),
-        method: "echo".to_string(),
-        params: Some([1]),
-        id: 1,
-    });
-    let req2 = client.request::<_, i64, ()>(Request {
-        jsonrpc: "2.0".to_string(),
-        method: "echo".to_string(),
-        params: Some([2]),
-        id: 2,
-    });
-
-    let (res1, res2) = join!(req1, req2);
-    let (res1, res2) = (res1.unwrap(), res2.unwrap());
-    let (res1, res2) = if res1.id.unwrap() == 1 {
-        (res1, res2)
-    } else {
-        (res2, res1)
-    };
-
-    insta::assert_debug_snapshot!(res1,
+    insta::assert_debug_snapshot!(results,
         @r###"
-    Response {
-        jsonrpc: "2.0",
-        result: Result(
-            1,
-        ),
-        id: Some(
-            1,
-        ),
-    }
-    "###
-    );
-
-    insta::assert_debug_snapshot!(res2,
-        @r###"
-    Response {
-        jsonrpc: "2.0",
-        result: Result(
-            2,
-        ),
-        id: Some(
-            2,
-        ),
-    }
+    [
+        "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32601,\"message\":\"Method not found\",\"data\":null},\"id\":5}",
+        "{\"jsonrpc\":\"2.0\",\"result\":-19,\"id\":2}",
+        "{\"jsonrpc\":\"2.0\",\"result\":19,\"id\":1}",
+        "{\"jsonrpc\":\"2.0\",\"result\":19,\"id\":3}",
+        "{\"jsonrpc\":\"2.0\",\"result\":19,\"id\":4}",
+    ]
     "###
     );
 
