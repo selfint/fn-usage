@@ -1,4 +1,4 @@
-use std::{process::Stdio, sync::mpsc};
+use std::process::Stdio;
 
 use lsp_types::{
     notification::Initialized, request::Initialize, InitializeError, InitializeParams,
@@ -14,25 +14,63 @@ fn start_rust_analyzer() -> process::Child {
     process::Command::new("rust-analyzer")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        // .stderr(Stdio::piped())
         .spawn()
         .expect("failed to start rust analyzer")
+}
+
+// #[tokio::test]
+async fn test_foo() {
+    let mut cmd = process::Command::new("rust-analyzer");
+
+    // Specify that we want the command's standard output piped back to us.
+    // By default, standard input/output/error will be inherited from the
+    // current process (for example, this means that standard input will
+    // come from the keyboard and standard output/error will go directly to
+    // the terminal if this process is invoked from the command line).
+    cmd.stdout(Stdio::piped());
+    cmd.stdin(Stdio::piped());
+
+    let mut child = cmd.spawn().expect("failed to spawn command");
+
+    let stdout = child
+        .stdout
+        .take()
+        .expect("child did not have a handle to stdout");
+
+    let mut stdin = child.stdin.take().unwrap();
+
+    let mut reader = BufReader::new(stdout);
+
+    dbg!("writing");
+    let handle1 = tokio::spawn(async move { stdin.write_all(b"hello world\n").await.unwrap() });
+    dbg!("wrote");
+
+    let handle = tokio::spawn(async move {
+        let mut line = String::new();
+        reader.read_line(&mut line).await.unwrap();
+        println!("Line: {}", line);
+    });
+
+    handle1.await.unwrap();
+    handle.await.unwrap();
+
+    assert!(false);
 }
 
 #[tokio::test]
 async fn test_rust_analyzer() {
     let mut child = start_rust_analyzer();
 
-    let (client_tx, client_rx) = mpsc::channel::<String>();
-    let (server_tx, server_rx) = mpsc::channel::<String>();
+    let (client_tx, mut client_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let (server_tx, server_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
     let (kill_server_input_tx, mut kill_server_input_rx) = oneshot::channel::<()>();
     let mut stdin = child.stdin.take().unwrap();
 
     let server_input_handle = tokio::spawn(async move {
         while kill_server_input_rx.try_recv().is_err() {
-            let Ok(msg) = client_rx.try_recv() else { continue };
-            println!("msg = {}", msg);
+            let Some(msg) = client_rx.recv().await else { continue };
             stdin.write_all(msg.as_bytes()).await.unwrap();
         }
     });
@@ -47,7 +85,6 @@ async fn test_rust_analyzer() {
         while kill_server_output_rx.try_recv().is_err() {
             dbg!("waiting");
             let mut header = String::new();
-            // TODO: line is not being read
             stdout_reader.read_line(&mut header).await.unwrap();
 
             println!("stdout = {}", header);
@@ -60,12 +97,12 @@ async fn test_rust_analyzer() {
                 ["Content-Type:", content_type] if next_content_type.is_none() => {
                     next_content_type = Some(content_type.to_string())
                 }
-                [""] if next_content_length.is_some() => {
+                [] if next_content_length.is_some() => {
                     let mut content = Vec::with_capacity(next_content_length.unwrap());
-                    stdout_reader.read_exact(&mut content).await.unwrap();
+                    let read_bytes = stdout_reader.read_exact(&mut content).await.unwrap();
+                    dbg!((read_bytes, next_content_length));
 
                     let content = String::from_utf8(content).unwrap();
-                    dbg!(&content);
                     server_tx.send(content).unwrap();
                     next_content_length = None;
                     next_content_type = None;
@@ -75,15 +112,15 @@ async fn test_rust_analyzer() {
         }
     });
 
-    let (kill_server_error_tx, mut kill_server_error_rx) = oneshot::channel::<()>();
-    let mut stderr_lines = BufReader::new(child.stderr.take().unwrap()).lines();
+    // let (kill_server_error_tx, mut kill_server_error_rx) = oneshot::channel::<()>();
+    // let mut stderr_lines = BufReader::new(child.stderr.take().unwrap()).lines();
 
-    let server_error_handle = tokio::spawn(async move {
-        while kill_server_error_rx.try_recv().is_err() {
-            let Ok(Some(line)) = stderr_lines.next_line().await else {continue };
-            eprintln!("Got err from server: {}", line);
-        }
-    });
+    // let server_error_handle = tokio::spawn(async move {
+    //     while kill_server_error_rx.try_recv().is_err() {
+    //         let Ok(Some(line)) = stderr_lines.next_line().await else {continue };
+    //         eprintln!("Got err from server: {}", line);
+    //     }
+    // });
 
     let client = lsp_client::Client::new(client_tx, server_rx);
 
@@ -99,8 +136,8 @@ async fn test_rust_analyzer() {
 
     kill_server_input_tx.send(()).unwrap();
     kill_server_output_tx.send(()).unwrap();
-    kill_server_error_tx.send(()).unwrap();
+    // kill_server_error_tx.send(()).unwrap();
     server_input_handle.await.unwrap();
     server_output_handle.await.unwrap();
-    server_error_handle.await.unwrap();
+    // server_error_handle.await.unwrap();
 }

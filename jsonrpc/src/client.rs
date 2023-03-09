@@ -6,18 +6,14 @@ use crate::types::{Notification, Request, Response};
 use serde_json::Value;
 use std::{
     collections::HashMap,
-    sync::{
-        mpsc::{Receiver, Sender},
-        Arc, Mutex,
-    },
-    thread::JoinHandle,
+    sync::{Arc, Mutex},
 };
 
 pub struct Client {
-    client_tx: Sender<String>,
+    client_tx: tokio::sync::mpsc::UnboundedSender<String>,
     pending_responses: Arc<Mutex<HashMap<i64, oneshot::Sender<Value>>>>,
-    handle: JoinHandle<()>,
-    kill_thread_tx: Sender<()>,
+    handle: tokio::task::JoinHandle<()>,
+    kill_thread_tx: std::sync::mpsc::Sender<()>,
 }
 
 impl Drop for Client {
@@ -30,36 +26,37 @@ impl Drop for Client {
 }
 
 impl Client {
-    pub fn new(client_tx: Sender<String>, server_rx: Receiver<String>) -> Self {
+    pub fn new(
+        client_tx: tokio::sync::mpsc::UnboundedSender<String>,
+        mut server_rx: tokio::sync::mpsc::UnboundedReceiver<String>,
+    ) -> Self {
         let pending_responses = Arc::new(Mutex::new(HashMap::<i64, oneshot::Sender<Value>>::new()));
 
         let pending_responses_clone = pending_responses.clone();
 
         let (kill_thread_tx, kill_thread_rx) = std::sync::mpsc::channel();
-        let handle = std::thread::spawn(move || loop {
-            if kill_thread_rx.try_recv().is_ok() {
-                break;
-            }
+        let handle = tokio::spawn(async move {
+            while kill_thread_rx.try_recv().is_err() {
+                if let Some(response) = server_rx.recv().await {
+                    let value = serde_json::from_str::<Value>(&response)
+                        .expect("failed to deserialize response");
 
-            if let Ok(response) = server_rx.try_recv() {
-                let value = serde_json::from_str::<Value>(&response)
-                    .expect("failed to deserialize response");
+                    let id = value
+                        .as_object()
+                        .expect("got non-object response")
+                        .get("id")
+                        .expect("got response without id")
+                        .as_i64()
+                        .expect("got non i64 id");
 
-                let id = value
-                    .as_object()
-                    .expect("got non-object response")
-                    .get("id")
-                    .expect("got response without id")
-                    .as_i64()
-                    .expect("got non i64 id");
-
-                pending_responses_clone
-                    .lock()
-                    .expect("failed to acquire lock")
-                    .remove(&id)
-                    .expect("no pending response matching server response")
-                    .send(value)
-                    .expect("failed to send response to pending response");
+                    pending_responses_clone
+                        .lock()
+                        .expect("failed to acquire lock")
+                        .remove(&id)
+                        .expect("no pending response matching server response")
+                        .send(value)
+                        .expect("failed to send response to pending response");
+                }
             }
         });
 
@@ -81,13 +78,13 @@ impl Client {
         R: DeserializeOwned,
         E: DeserializeOwned,
     {
-        let (tx, rx) = oneshot::channel();
+        let (response_tx, response_rx) = oneshot::channel();
 
         drop(
             self.pending_responses
                 .lock()
                 .unwrap()
-                .insert(request.id, tx),
+                .insert(request.id, response_tx),
         );
 
         let mut request_str =
@@ -102,7 +99,7 @@ impl Client {
             .send(request_str)
             .context("failed to send request")?;
 
-        let response = rx.await.context("failed to await response")?;
+        let response = response_rx.await.context("failed to await response")?;
         serde_json::from_value::<Response<R, E>>(response).context("failed to parse response")
     }
 

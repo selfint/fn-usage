@@ -5,10 +5,7 @@ use jsonrpc::{
 };
 use lsp_types::{notification::Notification as LspNotification, request::Request as LspRequest};
 use serde::de::DeserializeOwned;
-use std::sync::{
-    atomic::{AtomicI64, Ordering::SeqCst},
-    mpsc::{Receiver, Sender},
-};
+use std::sync::atomic::{AtomicI64, Ordering::SeqCst};
 
 pub struct Client {
     jsonrpc_client: JsonRpcClient,
@@ -16,7 +13,10 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(client_tx: Sender<String>, server_rx: Receiver<String>) -> Self {
+    pub fn new(
+        client_tx: tokio::sync::mpsc::UnboundedSender<String>,
+        server_rx: tokio::sync::mpsc::UnboundedReceiver<String>,
+    ) -> Self {
         let jsonrpc_client = JsonRpcClient::new(client_tx, server_rx);
         let request_id = AtomicI64::new(0);
         Self {
