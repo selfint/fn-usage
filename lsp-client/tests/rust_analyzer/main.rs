@@ -1,5 +1,6 @@
 use std::process::Stdio;
 
+use lsp_client::proxies::stdio::stdio_proxy;
 use lsp_types::{
     notification::Initialized, request::Initialize, InitializeError, InitializeParams,
     InitializedParams,
@@ -26,57 +27,18 @@ async fn test_rust_analyzer() {
     let (server_tx, server_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
 
     let mut stdin = child.stdin.take().unwrap();
-
     let server_input_handle = tokio::spawn(async move {
         while let Some(msg) = client_rx.recv().await {
             stdin.write_all(msg.as_bytes()).await.unwrap();
         }
     });
 
-    let mut stdout_reader = BufReader::new(child.stdout.take().unwrap());
-
-    let server_output_handle = tokio::spawn(async move {
-        let mut next_content_length = None;
-        let mut next_content_type = None;
-
-        loop {
-            let mut line = String::new();
-            stdout_reader.read_line(&mut line).await.unwrap();
-
-            let words = line.split_ascii_whitespace().collect::<Vec<_>>();
-            match (
-                words.as_slice(),
-                &mut next_content_length,
-                &mut next_content_type,
-            ) {
-                (["Content-Length:", content_length], None, None) => {
-                    next_content_length = Some(content_length.parse().unwrap())
-                }
-                (["Content-Type:", content_type], Some(_), None) => {
-                    next_content_type = Some(content_type.to_string())
-                }
-                ([], Some(content_length), _) => {
-                    let mut content = Vec::with_capacity(*content_length);
-                    let mut bytes_left = *content_length;
-                    while bytes_left > 0 {
-                        let read_bytes =
-                            stdout_reader.read_until(b'}', &mut content).await.unwrap();
-                        bytes_left -= read_bytes;
-                    }
-
-                    let content = String::from_utf8(content).unwrap();
-                    server_tx.send(content).unwrap();
-
-                    next_content_length = None;
-                    next_content_type = None;
-                }
-                _ => panic!("Got unexpected stdout"),
-            };
-        }
-    });
+    let server_output_handle = tokio::spawn(stdio_proxy(
+        BufReader::new(child.stdout.take().unwrap()),
+        server_tx,
+    ));
 
     let mut stderr_lines = BufReader::new(child.stderr.take().unwrap()).lines();
-
     let server_error_handle = tokio::spawn(async move {
         while let Ok(Some(line)) = stderr_lines.next_line().await {
             eprintln!("Got err from server: {}", line);
