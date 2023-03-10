@@ -13,7 +13,7 @@ pub fn stdio_client(
     stderr: ChildStderr,
 ) -> (Client, Vec<JoinHandle<()>>) {
     let (client_tx, mut client_rx) = unbounded_channel::<String>();
-    let (server_tx, server_rx) = unbounded_channel::<String>();
+    let (server_tx, server_rx) = unbounded_channel();
 
     let server_input_handle = tokio::spawn(async move {
         while let Some(msg) = client_rx.recv().await {
