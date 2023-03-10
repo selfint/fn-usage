@@ -1,7 +1,6 @@
 use jsonrpc::types::{JsonRpcResult, Response};
 use lsp_client::clients;
 use lsp_types::{notification::*, request::*, *};
-
 use std::{path::Path, process::Stdio, time::Duration};
 use tokio::process::{Child, Command};
 
@@ -111,18 +110,14 @@ async fn _test_rust_analyzer() {
         }
     }
 
-    let symbols = fn_usage::get_project_functions(project_files, &client).await;
+    let symbols = fn_usage::get_project_functions(&project_files, &client).await;
 
     let mut symbols_short = symbols
         .iter()
         .map(|(uri, s)| {
             let content =
                 String::from_utf8(std::fs::read(uri.to_file_path().unwrap()).unwrap()).unwrap();
-            let line_content = content
-                .lines()
-                .nth(s.selection_range.start.line as usize)
-                .unwrap()
-                .to_string();
+            let line_content = content.lines().nth(s.line as usize).unwrap().to_string();
             let file_name = uri
                 .to_file_path()
                 .unwrap()
@@ -134,9 +129,9 @@ async fn _test_rust_analyzer() {
 
             (
                 file_name,
-                s.selection_range.start,
+                s,
                 line_content,
-                " ".repeat(s.selection_range.start.character as usize) + "^",
+                " ".repeat(s.character as usize) + "^",
             )
         })
         .collect::<Vec<_>>();
@@ -144,7 +139,7 @@ async fn _test_rust_analyzer() {
     symbols_short.sort();
     insta::assert_debug_snapshot!(symbols_short);
 
-    let fn_calls = fn_usage::get_function_calls(&symbols, client, root_path).await;
+    let (fn_items, fn_calls) = fn_usage::get_function_calls(&symbols, client, root_path).await;
 
     let mut short_fn_calls = fn_calls
         .iter()
@@ -174,9 +169,9 @@ async fn _test_rust_analyzer() {
     short_fn_calls.sort();
     insta::assert_debug_snapshot!(short_fn_calls);
 
-    let node_usage = fn_usage::calc_fn_usage(symbols, fn_calls);
+    let fn_usage = fn_usage::calc_fn_usage(&fn_items, &fn_calls);
 
-    let mut short_usage = node_usage
+    let mut short_usage = fn_usage
         .iter()
         .map(|(src, usage)| {
             let src_path = src.uri.to_file_path().unwrap();

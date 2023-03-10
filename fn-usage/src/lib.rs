@@ -1,11 +1,13 @@
 use jsonrpc::types::JsonRpcResult;
+use lsp_client::client::Client;
 use lsp_types::{request::*, *};
-use petgraph::{graph, stable_graph::NodeIndex, Graph};
+use petgraph::{algo::has_path_connecting, graph::DiGraph, visit::NodeRef};
+use std::path::PathBuf;
 
 pub async fn get_project_functions(
-    project_files: Vec<std::path::PathBuf>,
-    client: &lsp_client::client::Client,
-) -> Vec<(Url, DocumentSymbol)> {
+    project_files: &[PathBuf],
+    client: &Client,
+) -> Vec<(Url, Position)> {
     let mut symbol_futures = vec![];
     for f in project_files {
         let uri = Url::from_file_path(f).unwrap();
@@ -39,21 +41,20 @@ pub async fn get_project_functions(
         };
 
         match response {
-            DocumentSymbolResponse::Flat(flat) => flat.iter().for_each(|_s| {
-                // if matches!(s.kind, SymbolKind::FUNCTION | SymbolKind::METHOD) {
-                //     symbols.push((uri.clone(), s));
-                // }
-                panic!("got flat");
+            DocumentSymbolResponse::Flat(flat) => flat.iter().for_each(|s| {
+                if matches!(s.kind, SymbolKind::FUNCTION | SymbolKind::METHOD) {
+                    symbols.push((uri.clone(), s.location.range.start));
+                }
             }),
             DocumentSymbolResponse::Nested(nested) => {
                 fn walk_nested_symbols(
                     uri: &Url,
                     nested: Vec<DocumentSymbol>,
-                    symbols: &mut Vec<(Url, DocumentSymbol)>,
+                    symbols: &mut Vec<(Url, Position)>,
                 ) {
                     for s in nested {
                         if matches!(s.kind, SymbolKind::FUNCTION | SymbolKind::METHOD) {
-                            symbols.push((uri.clone(), s.clone()));
+                            symbols.push((uri.clone(), s.selection_range.start));
                         }
 
                         if let Some(children) = s.children {
@@ -66,39 +67,62 @@ pub async fn get_project_functions(
             }
         };
     }
+
     symbols
 }
 
 pub async fn get_function_calls(
-    symbols: &Vec<(Url, DocumentSymbol)>,
-    client: lsp_client::client::Client,
-    root_path: std::path::PathBuf,
-) -> Vec<(CallHierarchyItem, CallHierarchyItem)> {
+    symbols: &[(Url, Position)],
+    client: Client,
+    root_path: PathBuf,
+) -> (
+    Vec<CallHierarchyItem>,
+    Vec<(CallHierarchyItem, CallHierarchyItem)>,
+) {
+    let mut fn_call_items = vec![];
     let mut fn_calls_futures = vec![];
     for (file, symbol) in symbols {
-        let item = CallHierarchyItem {
-            name: symbol.name.clone(),
-            kind: symbol.kind,
-            tags: symbol.tags.clone(),
-            detail: symbol.detail.clone(),
-            uri: file.clone(),
-            range: symbol.range,
-            selection_range: symbol.selection_range,
-            data: None,
-        };
-
-        let request =
-            client.request::<CallHierarchyIncomingCalls, ()>(CallHierarchyIncomingCallsParams {
-                item: item.clone(),
-                partial_result_params: lsp_types::PartialResultParams {
-                    partial_result_token: None,
+        let items = match client
+            .request::<CallHierarchyPrepare, ()>(CallHierarchyPrepareParams {
+                text_document_position_params: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri: file.clone() },
+                    position: *symbol,
                 },
                 work_done_progress_params: WorkDoneProgressParams {
                     work_done_token: None,
                 },
-            });
+            })
+            .await
+            .unwrap()
+            .result
+        {
+            JsonRpcResult::Result(Some(items)) => items
+                .into_iter()
+                .filter(|i| matches!(i.kind, SymbolKind::FUNCTION | SymbolKind::METHOD)),
+            JsonRpcResult::Result(None) => todo!(),
+            JsonRpcResult::Error {
+                code: _,
+                message: _,
+                data: _,
+            } => todo!(),
+        };
 
-        fn_calls_futures.push((item, request));
+        for item in items {
+            fn_call_items.push(item.clone());
+            let request = client.request::<CallHierarchyIncomingCalls, ()>(
+                CallHierarchyIncomingCallsParams {
+                    item: item.clone(),
+                    partial_result_params: lsp_types::PartialResultParams {
+                        partial_result_token: None,
+                    },
+                    work_done_progress_params: WorkDoneProgressParams {
+                        work_done_token: None,
+                    },
+                },
+            );
+
+            fn_calls_futures.push((item, request));
+        }
     }
 
     let mut fn_calls = vec![];
@@ -132,31 +156,22 @@ pub async fn get_function_calls(
             } => panic!("Got error {code}\n{message}"),
         }
     }
-    fn_calls
+
+    (fn_call_items, fn_calls)
 }
 
 pub fn calc_fn_usage(
-    symbols: Vec<(Url, DocumentSymbol)>,
-    fn_calls: Vec<(CallHierarchyItem, CallHierarchyItem)>,
+    fn_items: &[CallHierarchyItem],
+    fn_calls: &[(CallHierarchyItem, CallHierarchyItem)],
 ) -> Vec<(CallHierarchyItem, f32)> {
-    let mut graph = graph::DiGraph::<CallHierarchyItem, (), _>::new();
+    let mut graph = DiGraph::<(), (), _>::new();
     let mut nodes = vec![];
-    for (uri, symbol) in &symbols {
-        let item = CallHierarchyItem {
-            name: symbol.name.clone(),
-            kind: symbol.kind,
-            tags: symbol.tags.clone(),
-            detail: symbol.detail.clone(),
-            uri: uri.clone(),
-            range: symbol.range,
-            selection_range: symbol.selection_range,
-            data: None,
-        };
-        let node = graph.add_node(item.clone());
+    for item in fn_items {
+        let node = graph.add_node(());
         nodes.push((item, node));
     }
 
-    for (src, dst) in &fn_calls {
+    for (src, dst) in fn_calls {
         let src_node = nodes
             .iter()
             .find(|(n, _)| n.selection_range == src.selection_range)
@@ -171,48 +186,18 @@ pub fn calc_fn_usage(
         graph.add_edge(src_node, dst_node, ());
     }
 
-    fn has_path(
-        graph: &Graph<CallHierarchyItem, ()>,
-        src: &NodeIndex,
-        dst: &NodeIndex,
-        visited: &[&NodeIndex],
-    ) -> bool {
-        if src == dst {
-            true
-        } else if visited.contains(&src) {
-            false
-        } else {
-            let other = [src];
-            let neighbor_visited: Vec<&NodeIndex> = visited
-                .iter()
-                .copied()
-                .chain(other.into_iter())
-                .collect::<Vec<_>>();
-
-            for neighbor in graph.neighbors(*src) {
-                if has_path(graph, &neighbor, dst, &neighbor_visited) {
-                    return true;
-                }
-            }
-
-            false
-        }
-    }
-
-    let node_usage = nodes
+    nodes
         .iter()
         .map(|(item, node)| {
             let usage = (nodes
                 .iter()
-                .filter(|(_, other)| has_path(&graph, other, node, &[]))
+                .filter(|(_, other)| has_path_connecting(&graph, other.id(), node.id(), None))
                 .count()
                 - 1) as f32
                 / nodes.len() as f32
                 * 100.;
 
-            (item.clone(), usage)
+            ((*item).clone(), usage)
         })
-        .collect::<Vec<_>>();
-
-    node_usage
+        .collect::<Vec<_>>()
 }
