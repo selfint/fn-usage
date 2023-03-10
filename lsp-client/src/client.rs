@@ -1,11 +1,7 @@
 use anyhow::Result;
-use jsonrpc::{
-    client::Client as JsonRpcClient,
-    types::{Notification as JsonRpcNotification, Request as JsonRpcRequest, Response},
-};
+use jsonrpc::{client::Client as JsonRpcClient, types::Response};
 use lsp_types::{notification::Notification as LspNotification, request::Request as LspRequest};
 use serde::de::DeserializeOwned;
-use std::sync::atomic::{AtomicI64, Ordering::SeqCst};
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
@@ -13,7 +9,6 @@ use tokio::{
 
 pub struct Client {
     jsonrpc_client: JsonRpcClient,
-    request_id_counter: AtomicI64,
     encoder_handle: JoinHandle<()>,
 }
 
@@ -29,7 +24,6 @@ impl Client {
 
         Self {
             jsonrpc_client: JsonRpcClient::new(jsonrpc_client_tx, server_rx),
-            request_id_counter: AtomicI64::new(0),
             encoder_handle: tokio::spawn(Client::lsp_encode(jsonrpc_client_rx, client_tx)),
         }
     }
@@ -48,12 +42,7 @@ impl Client {
         E: DeserializeOwned,
     {
         self.jsonrpc_client
-            .request::<R::Params, R::Result, E>(JsonRpcRequest {
-                jsonrpc: "2.0".to_string(),
-                method: R::METHOD.to_string(),
-                params: Some(params),
-                id: self.request_id_counter.fetch_add(1, SeqCst),
-            })
+            .request(R::METHOD.to_string(), Some(params))
             .await
     }
 
@@ -61,10 +50,7 @@ impl Client {
     where
         R: LspNotification,
     {
-        self.jsonrpc_client.notify::<_>(JsonRpcNotification {
-            jsonrpc: "2.0".to_string(),
-            method: R::METHOD.to_string(),
-            params: Some(params),
-        })
+        self.jsonrpc_client
+            .notify(R::METHOD.to_string(), Some(params))
     }
 }
