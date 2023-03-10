@@ -11,6 +11,19 @@ fn test_request_serialization() {
         },
         @r###"{"jsonrpc": "2.0", "method": "method", "params": [42, 23], "id": 1}"###
     );
+
+    // a but awkward, as Some(()) should probably just no be serialized
+    // implementing this requires a lot of ugly code, so won't be implemented
+    // unless it is a problem
+    insta::assert_compact_json_snapshot!(
+        Request {
+            jsonrpc: "2.0".to_string(),
+            method: "method".to_string(),
+            params: Some(()),
+            id: 1,
+        },
+        @r###"{"jsonrpc": "2.0", "method": "method", "params": null, "id": 1}"###
+    );
 }
 
 #[test]
