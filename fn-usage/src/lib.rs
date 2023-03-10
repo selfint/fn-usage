@@ -1,11 +1,6 @@
 use jsonrpc::types::JsonRpcResult;
-use lsp_types::request::*;
-
-use lsp_types::*;
-
-use petgraph::graph;
-use petgraph::stable_graph::NodeIndex;
-use petgraph::Graph;
+use lsp_types::{request::*, *};
+use petgraph::{graph, stable_graph::NodeIndex, Graph};
 
 pub async fn get_project_functions(
     project_files: Vec<std::path::PathBuf>,

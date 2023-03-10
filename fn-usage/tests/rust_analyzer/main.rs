@@ -1,12 +1,8 @@
-use jsonrpc::types::JsonRpcResult;
-use jsonrpc::types::Response;
+use jsonrpc::types::{JsonRpcResult, Response};
 use lsp_client::clients;
-use lsp_types::notification::*;
-use lsp_types::request::*;
-use lsp_types::*;
+use lsp_types::{notification::*, request::*, *};
 
-use std::time::Duration;
-use std::{path::Path, process::Stdio};
+use std::{path::Path, process::Stdio, time::Duration};
 use tokio::process::{Child, Command};
 
 const SAMPLE_PROJECT_PATH: &str = "tests/rust_analyzer/sample_rust_project";
