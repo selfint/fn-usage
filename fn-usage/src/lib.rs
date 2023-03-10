@@ -1,15 +1,15 @@
 use jsonrpc::types::JsonRpcResult;
 use lsp_types::request::*;
-use lsp_types::request::*;
+
 use lsp_types::*;
-use lsp_types::*;
+
 use petgraph::graph;
 use petgraph::stable_graph::NodeIndex;
 use petgraph::Graph;
 
-use std::time::Duration;
-use std::{path::Path, process::Stdio};
-use tokio::process::{Child, Command};
+
+
+
 
 pub async fn get_project_functions(
     project_files: Vec<std::path::PathBuf>,

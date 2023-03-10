@@ -4,9 +4,9 @@ use lsp_client::clients;
 use lsp_types::notification::*;
 use lsp_types::request::*;
 use lsp_types::*;
-use petgraph::graph;
-use petgraph::stable_graph::NodeIndex;
-use petgraph::Graph;
+
+
+
 
 use std::time::Duration;
 use std::{path::Path, process::Stdio};
