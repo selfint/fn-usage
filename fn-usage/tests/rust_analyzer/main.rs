@@ -5,9 +5,6 @@ use lsp_types::notification::*;
 use lsp_types::request::*;
 use lsp_types::*;
 
-
-
-
 use std::time::Duration;
 use std::{path::Path, process::Stdio};
 use tokio::process::{Child, Command};
