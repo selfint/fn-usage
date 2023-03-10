@@ -11,11 +11,12 @@ jsonrpc = { path = "../jsonrpc" }
 lsp-types = "0.94.0"
 serde = { version = "1.0.154", features = ["derive"] }
 tokio = { version = "1.26.0", features = [
-    "sync",
-    "rt",
-    "macros",
     "io-util",
+    "macros",
     "process",
+    "rt",
+    "sync",
+    "time",
 ] }
 
 [dev-dependencies]

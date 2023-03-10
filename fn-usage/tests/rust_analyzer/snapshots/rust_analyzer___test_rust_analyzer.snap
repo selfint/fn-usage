@@ -1,0 +1,8 @@
+---
+source: fn-usage/tests/rust_analyzer/main.rs
+expression: short_project_files
+---
+[
+    "main.rs",
+    "other_file.rs",
+]

@@ -1,0 +1,36 @@
+---
+source: fn-usage/tests/rust_analyzer/main.rs
+expression: short_fn_calls
+---
+[
+    (
+        "main.rs",
+        "fn main() {",
+        "main.rs",
+        "    fn impl_method(&self) {",
+    ),
+    (
+        "main.rs",
+        "    fn in_foo() {",
+        "main.rs",
+        "    fn impl_method(&self) {",
+    ),
+    (
+        "main.rs",
+        "fn main() {",
+        "main.rs",
+        "fn foo() {",
+    ),
+    (
+        "main.rs",
+        "fn foo() {",
+        "main.rs",
+        "    fn in_foo() {",
+    ),
+    (
+        "main.rs",
+        "    fn impl_method(&self) {",
+        "other_file.rs",
+        "pub fn other_file_method() {}",
+    ),
+]
