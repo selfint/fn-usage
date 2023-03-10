@@ -1,6 +1,5 @@
 ---
 source: fn-usage/tests/rust_analyzer/main.rs
-assertion_line: 392
 expression: short_usage
 ---
 [
