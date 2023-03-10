@@ -7,10 +7,6 @@ use petgraph::graph;
 use petgraph::stable_graph::NodeIndex;
 use petgraph::Graph;
 
-
-
-
-
 pub async fn get_project_functions(
     project_files: Vec<std::path::PathBuf>,
     client: &lsp_client::client::Client,
