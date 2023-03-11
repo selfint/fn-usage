@@ -38,7 +38,7 @@ async fn main() {
 
     let (client, handles) = clients::stdio_client(stdin, stdout, stderr);
 
-    client
+    let response = client
         .request::<Initialize, InitializeError>(InitializeParams {
             root_uri: Some(root_uri.clone()),
             capabilities: ClientCapabilities {
@@ -56,6 +56,19 @@ async fn main() {
         .await
         .unwrap();
 
+    match response.result {
+        JsonRpcResult::Result(result) if result.capabilities.call_hierarchy_provider.is_none() => {
+            eprintln!("Server has no call hierarchy provider, quitting...");
+            return;
+        }
+        JsonRpcResult::Error {
+            code,
+            message,
+            data: _,
+        } => eprintln!("Failed to init server, error {code}:\n{message}"),
+        _ => {}
+    };
+
     client.notify::<Initialized>(InitializedParams {}).unwrap();
 
     let root_path = root_uri.to_file_path().unwrap();
@@ -67,6 +80,17 @@ async fn main() {
 
     // wait for server to start
     let uri = Url::from_file_path(project_files.first().unwrap()).unwrap();
+    // client
+    //     .notify::<DidOpenTextDocument>(DidOpenTextDocumentParams {
+    //         text_document: TextDocumentItem {
+    //             uri: uri.clone(),
+    //             language_id: "unknown".to_string(),
+    //             version: 0,
+    //             text: "".to_string(),
+    //         },
+    //     })
+    //     .unwrap();
+
     while let Ok(Response {
         jsonrpc: _,
         result,
