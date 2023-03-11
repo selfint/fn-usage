@@ -160,10 +160,10 @@ pub async fn get_function_calls(
     (fn_call_items, fn_calls)
 }
 
-pub fn calc_fn_usage(
-    fn_items: &[CallHierarchyItem],
+pub fn calc_fn_usage<'a>(
+    fn_items: &'a [CallHierarchyItem],
     fn_calls: &[(CallHierarchyItem, CallHierarchyItem)],
-) -> Vec<(CallHierarchyItem, f32)> {
+) -> Vec<(&'a CallHierarchyItem, f32)> {
     let mut graph = DiGraph::<(), (), _>::new();
     let mut nodes = vec![];
     for item in fn_items {
@@ -197,7 +197,7 @@ pub fn calc_fn_usage(
                 / nodes.len() as f32
                 * 100.;
 
-            ((*item).clone(), usage)
+            (*item, usage)
         })
         .collect::<Vec<_>>()
 }
