@@ -58,19 +58,7 @@ async fn _test_rust_analyzer() {
         .flat_map(|fs| fs.map(|f| f.unwrap()))
         .collect::<Vec<_>>();
 
-    let mut short_project_files = project_files
-        .iter()
-        .map(|f| {
-            f.as_path()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string()
-        })
-        .collect::<Vec<_>>();
-
-    short_project_files.sort();
+    let short_project_files = get_short_files(&project_files);
     insta::assert_debug_snapshot!(short_project_files);
 
     // wait for server to start
@@ -110,14 +98,58 @@ async fn _test_rust_analyzer() {
         }
     }
 
-    let symbols = fn_usage::get_project_functions(&project_files, &client).await;
+    let fn_definitions = fn_usage::get_project_functions(&project_files, &client).await;
 
-    let mut symbols_short = symbols
+    let symbols_short = get_short_fn_definitions(&fn_definitions);
+    insta::assert_debug_snapshot!(symbols_short);
+
+    let (fn_definitions, fn_calls) =
+        fn_usage::get_functions_graph(&fn_definitions, &client, root_path).await;
+
+    let short_fn_calls = get_short_fn_calls(&fn_calls);
+    insta::assert_debug_snapshot!(short_fn_calls);
+
+    let fn_usage = fn_usage::calc_fn_usage(&fn_definitions, &fn_calls);
+
+    let short_usage = get_short_fn_usage(fn_usage);
+    insta::assert_debug_snapshot!(short_usage);
+
+    for handle in handles {
+        handle.abort();
+    }
+}
+
+fn get_short_files(project_files: &[std::path::PathBuf]) -> Vec<String> {
+    let mut short_project_files = project_files
         .iter()
-        .map(|(uri, s)| {
-            let content =
-                String::from_utf8(std::fs::read(uri.to_file_path().unwrap()).unwrap()).unwrap();
-            let line_content = content.lines().nth(s.line as usize).unwrap().to_string();
+        .map(|f| {
+            f.as_path()
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+
+    short_project_files.sort();
+    short_project_files
+}
+
+fn get_short_fn_definitions(
+    fn_definitions: &Vec<(Url, DocumentSymbol)>,
+) -> Vec<(String, String, String)> {
+    let mut symbols_short = fn_definitions
+        .iter()
+        .map(|(uri, fn_definition)| {
+            let fn_definition_line =
+                String::from_utf8(std::fs::read(uri.to_file_path().unwrap()).unwrap())
+                    .unwrap()
+                    .lines()
+                    .nth(fn_definition.selection_range.start.line as usize)
+                    .unwrap()
+                    .to_string();
+
             let file_name = uri
                 .to_file_path()
                 .unwrap()
@@ -129,18 +161,19 @@ async fn _test_rust_analyzer() {
 
             (
                 file_name,
-                s,
-                line_content,
-                " ".repeat(s.character as usize) + "^",
+                fn_definition_line,
+                " ".repeat(fn_definition.selection_range.start.character as usize) + "^",
             )
         })
         .collect::<Vec<_>>();
 
     symbols_short.sort();
-    insta::assert_debug_snapshot!(symbols_short);
+    symbols_short
+}
 
-    let (fn_items, fn_calls) = fn_usage::get_function_calls(&symbols, client, root_path).await;
-
+fn get_short_fn_calls(
+    fn_calls: &Vec<(CallHierarchyItem, CallHierarchyItem)>,
+) -> Vec<(String, String, String, String)> {
     let mut short_fn_calls = fn_calls
         .iter()
         .map(|(src, dst)| {
@@ -167,10 +200,10 @@ async fn _test_rust_analyzer() {
         .collect::<Vec<_>>();
 
     short_fn_calls.sort();
-    insta::assert_debug_snapshot!(short_fn_calls);
+    short_fn_calls
+}
 
-    let fn_usage = fn_usage::calc_fn_usage(&fn_items, &fn_calls);
-
+fn get_short_fn_usage(fn_usage: Vec<(&CallHierarchyItem, f32)>) -> Vec<(String, String, String)> {
     let mut short_usage = fn_usage
         .iter()
         .map(|(src, usage)| {
@@ -188,11 +221,7 @@ async fn _test_rust_analyzer() {
         .collect::<Vec<_>>();
 
     short_usage.sort();
-    insta::assert_debug_snapshot!(short_usage);
-
-    for handle in handles {
-        handle.abort();
-    }
+    short_usage
 }
 
 #[tokio::test]

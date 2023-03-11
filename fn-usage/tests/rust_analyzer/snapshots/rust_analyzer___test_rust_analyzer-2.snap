@@ -5,55 +5,31 @@ expression: symbols_short
 [
     (
         "main.rs",
-        Position {
-            line: 5,
-            character: 7,
-        },
         "    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {",
         "       ^",
     ),
     (
         "main.rs",
-        Position {
-            line: 11,
-            character: 7,
-        },
         "    fn impl_method(&self) {",
         "       ^",
     ),
     (
         "main.rs",
-        Position {
-            line: 16,
-            character: 3,
-        },
-        "fn main() {",
-        "   ^",
+        "    fn in_foo() {",
+        "       ^",
     ),
     (
         "main.rs",
-        Position {
-            line: 21,
-            character: 3,
-        },
         "fn foo() {",
         "   ^",
     ),
     (
         "main.rs",
-        Position {
-            line: 22,
-            character: 7,
-        },
-        "    fn in_foo() {",
-        "       ^",
+        "fn main() {",
+        "   ^",
     ),
     (
         "other_file.rs",
-        Position {
-            line: 0,
-            character: 7,
-        },
         "pub fn other_file_method() {}",
         "       ^",
     ),

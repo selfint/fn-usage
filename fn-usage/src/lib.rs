@@ -7,14 +7,17 @@ use std::path::PathBuf;
 pub async fn get_project_functions(
     project_files: &[PathBuf],
     client: &Client,
-) -> Vec<(Url, Position)> {
+) -> Vec<(Url, DocumentSymbol)> {
+    let project_file_uris = project_files
+        .iter()
+        .map(|file| Url::from_file_path(file).unwrap())
+        .collect::<Vec<_>>();
+
     let mut symbol_futures = vec![];
-    for f in project_files {
-        let uri = Url::from_file_path(f).unwrap();
-        symbol_futures.push((
-            uri.clone(),
+    for uri in &project_file_uris {
+        symbol_futures.push(
             client.request::<DocumentSymbolRequest, ()>(DocumentSymbolParams {
-                text_document: lsp_types::TextDocumentIdentifier { uri },
+                text_document: lsp_types::TextDocumentIdentifier { uri: uri.clone() },
                 partial_result_params: lsp_types::PartialResultParams {
                     partial_result_token: None,
                 },
@@ -22,11 +25,11 @@ pub async fn get_project_functions(
                     work_done_token: None,
                 },
             }),
-        ));
+        );
     }
 
-    let mut symbols = vec![];
-    for (uri, s) in symbol_futures {
+    let mut fn_definitions = vec![];
+    for (uri, s) in project_file_uris.iter().zip(symbol_futures.into_iter()) {
         let response = match s.await.unwrap().result {
             JsonRpcResult::Result(Some(response)) => response,
             JsonRpcResult::Result(None) => panic!("Got no symbols in doc: {}", uri),
@@ -41,39 +44,37 @@ pub async fn get_project_functions(
         };
 
         match response {
-            DocumentSymbolResponse::Flat(flat) => flat.iter().for_each(|s| {
-                if matches!(s.kind, SymbolKind::FUNCTION | SymbolKind::METHOD) {
-                    symbols.push((uri.clone(), s.location.range.start));
-                }
-            }),
+            DocumentSymbolResponse::Flat(_) => {
+                panic!("Got flat document symbol");
+            }
             DocumentSymbolResponse::Nested(nested) => {
                 fn walk_nested_symbols(
                     uri: &Url,
-                    nested: Vec<DocumentSymbol>,
-                    symbols: &mut Vec<(Url, Position)>,
+                    children: Vec<DocumentSymbol>,
+                    fn_definitions: &mut Vec<(Url, DocumentSymbol)>,
                 ) {
-                    for s in nested {
-                        if matches!(s.kind, SymbolKind::FUNCTION | SymbolKind::METHOD) {
-                            symbols.push((uri.clone(), s.selection_range.start));
+                    for child in children {
+                        if matches!(child.kind, SymbolKind::FUNCTION | SymbolKind::METHOD) {
+                            fn_definitions.push((uri.clone(), child.clone()));
                         }
 
-                        if let Some(children) = s.children {
-                            walk_nested_symbols(uri, children, symbols);
+                        if let Some(children) = child.children {
+                            walk_nested_symbols(uri, children, fn_definitions);
                         }
                     }
                 }
 
-                walk_nested_symbols(&uri, nested, &mut symbols);
+                walk_nested_symbols(uri, nested, &mut fn_definitions);
             }
         };
     }
 
-    symbols
+    fn_definitions
 }
 
-pub async fn get_function_calls(
-    symbols: &[(Url, Position)],
-    client: Client,
+pub async fn get_functions_graph(
+    fn_definitions: &[(Url, DocumentSymbol)],
+    client: &Client,
     root_path: PathBuf,
 ) -> (
     Vec<CallHierarchyItem>,
@@ -81,12 +82,12 @@ pub async fn get_function_calls(
 ) {
     let mut fn_call_items = vec![];
     let mut fn_calls_futures = vec![];
-    for (file, symbol) in symbols {
-        let items = match client
+    for (file, symbol) in fn_definitions {
+        let fn_definition_items = match client
             .request::<CallHierarchyPrepare, ()>(CallHierarchyPrepareParams {
                 text_document_position_params: TextDocumentPositionParams {
                     text_document: TextDocumentIdentifier { uri: file.clone() },
-                    position: *symbol,
+                    position: symbol.selection_range.start,
                 },
                 work_done_progress_params: WorkDoneProgressParams {
                     work_done_token: None,
@@ -107,11 +108,12 @@ pub async fn get_function_calls(
             } => todo!(),
         };
 
-        for item in items {
-            fn_call_items.push(item.clone());
+        for fn_definition_item in fn_definition_items {
+            fn_call_items.push(fn_definition_item.clone());
+
             let request = client.request::<CallHierarchyIncomingCalls, ()>(
                 CallHierarchyIncomingCallsParams {
-                    item: item.clone(),
+                    item: fn_definition_item.clone(),
                     partial_result_params: lsp_types::PartialResultParams {
                         partial_result_token: None,
                     },
@@ -120,8 +122,7 @@ pub async fn get_function_calls(
                     },
                 },
             );
-
-            fn_calls_futures.push((item, request));
+            fn_calls_futures.push((fn_definition_item, request));
         }
     }
 
@@ -161,14 +162,14 @@ pub async fn get_function_calls(
 }
 
 pub fn calc_fn_usage<'a>(
-    fn_items: &'a [CallHierarchyItem],
+    fn_definitions: &'a [CallHierarchyItem],
     fn_calls: &[(CallHierarchyItem, CallHierarchyItem)],
 ) -> Vec<(&'a CallHierarchyItem, f32)> {
     let mut graph = DiGraph::<(), (), _>::new();
     let mut nodes = vec![];
-    for item in fn_items {
+    for fn_definition in fn_definitions {
         let node = graph.add_node(());
-        nodes.push((item, node));
+        nodes.push((fn_definition, node));
     }
 
     for (src, dst) in fn_calls {
