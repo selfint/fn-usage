@@ -137,7 +137,7 @@ fn get_short_files(project_files: &[std::path::PathBuf]) -> Vec<String> {
 }
 
 fn get_short_fn_definitions(
-    fn_definitions: &Vec<(Url, DocumentSymbol)>,
+    fn_definitions: &[(Url, DocumentSymbol)],
 ) -> Vec<(String, String, String)> {
     let mut symbols_short = fn_definitions
         .iter()
@@ -172,7 +172,7 @@ fn get_short_fn_definitions(
 }
 
 fn get_short_fn_calls(
-    fn_calls: &Vec<(CallHierarchyItem, CallHierarchyItem)>,
+    fn_calls: &[(CallHierarchyItem, CallHierarchyItem)],
 ) -> Vec<(String, String, String, String)> {
     let mut short_fn_calls = fn_calls
         .iter()
