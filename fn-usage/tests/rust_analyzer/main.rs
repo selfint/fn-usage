@@ -6,19 +6,9 @@ use tokio::process::{Child, Command};
 
 const SAMPLE_PROJECT_PATH: &str = "tests/rust_analyzer/sample_rust_project";
 
-fn start_rust_analyzer() -> Child {
-    Command::new("rust-analyzer")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("failed to start rust analyzer")
-}
-
-fn get_sample_root() -> Url {
-    let sample_project_path = Path::new(SAMPLE_PROJECT_PATH).canonicalize().unwrap();
-
-    Url::from_file_path(sample_project_path).expect("failed to convert project path to URL")
+#[tokio::test]
+async fn test_rust_analyzer() {
+    _test_rust_analyzer().await
 }
 
 async fn _test_rust_analyzer() {
@@ -117,6 +107,21 @@ async fn _test_rust_analyzer() {
     for handle in handles {
         handle.abort();
     }
+}
+
+fn start_rust_analyzer() -> Child {
+    Command::new("rust-analyzer")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to start rust analyzer")
+}
+
+fn get_sample_root() -> Url {
+    let sample_project_path = Path::new(SAMPLE_PROJECT_PATH).canonicalize().unwrap();
+
+    Url::from_file_path(sample_project_path).expect("failed to convert project path to URL")
 }
 
 fn get_short_files(project_files: &[std::path::PathBuf]) -> Vec<String> {
@@ -222,9 +227,4 @@ fn get_short_fn_usage(fn_usage: Vec<(&CallHierarchyItem, f32)>) -> Vec<(String, 
 
     short_usage.sort();
     short_usage
-}
-
-#[tokio::test]
-async fn test_rust_analyzer() {
-    _test_rust_analyzer().await
 }
