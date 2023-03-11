@@ -40,8 +40,9 @@ impl Client {
 
         let response_resolver_handle = tokio::spawn(async move {
             while let Some(response) = server_rx.recv().await {
-                Client::handle_response(response, &pending_responses_clone)
-                    .expect("failed to handle response");
+                if let Err(error) = Client::handle_response(response, &pending_responses_clone) {
+                    eprintln!("Failed to handle response due to error: {:?}", error);
+                }
             }
         });
 

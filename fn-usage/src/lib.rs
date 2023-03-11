@@ -154,7 +154,7 @@ pub async fn get_functions_graph(
                 code,
                 message,
                 data: _,
-            } => panic!("Got error {code}\n{message}"),
+            } => eprintln!("Got error {code}\n{message}"),
         }
     }
 
