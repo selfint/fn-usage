@@ -16,7 +16,7 @@ pub async fn get_project_functions(
     let mut symbol_futures = vec![];
     for uri in &project_file_uris {
         symbol_futures.push(
-            client.request::<DocumentSymbolRequest, ()>(DocumentSymbolParams {
+            client.request::<DocumentSymbolRequest>(DocumentSymbolParams {
                 text_document: lsp_types::TextDocumentIdentifier { uri: uri.clone() },
                 partial_result_params: lsp_types::PartialResultParams {
                     partial_result_token: None,
@@ -84,7 +84,7 @@ pub async fn get_functions_graph(
     let mut fn_calls_futures = vec![];
     for (file, symbol) in fn_definitions {
         let fn_definition_items = match client
-            .request::<CallHierarchyPrepare, ()>(CallHierarchyPrepareParams {
+            .request::<CallHierarchyPrepare>(CallHierarchyPrepareParams {
                 text_document_position_params: TextDocumentPositionParams {
                     text_document: TextDocumentIdentifier { uri: file.clone() },
                     position: symbol.selection_range.start,
@@ -111,8 +111,8 @@ pub async fn get_functions_graph(
         for fn_definition_item in fn_definition_items {
             fn_call_items.push(fn_definition_item.clone());
 
-            let request = client.request::<CallHierarchyIncomingCalls, ()>(
-                CallHierarchyIncomingCallsParams {
+            let request =
+                client.request::<CallHierarchyIncomingCalls>(CallHierarchyIncomingCallsParams {
                     item: fn_definition_item.clone(),
                     partial_result_params: lsp_types::PartialResultParams {
                         partial_result_token: None,
@@ -120,8 +120,7 @@ pub async fn get_functions_graph(
                     work_done_progress_params: WorkDoneProgressParams {
                         work_done_token: None,
                     },
-                },
-            );
+                });
             fn_calls_futures.push((fn_definition_item, request));
         }
     }

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use jsonrpc::{client::Client as JsonRpcClient, types::Response};
 use lsp_types::{notification::Notification as LspNotification, request::Request as LspRequest};
-use serde::de::DeserializeOwned;
+use serde_json::Value;
 use tokio::{
     sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
     task::JoinHandle,
@@ -36,10 +36,9 @@ impl Client {
         }
     }
 
-    pub async fn request<R, E>(&self, params: R::Params) -> Result<Response<R::Result, E>>
+    pub async fn request<R>(&self, params: R::Params) -> Result<Response<R::Result, Value>>
     where
         R: LspRequest,
-        E: DeserializeOwned,
     {
         self.jsonrpc_client
             .request(R::METHOD.to_string(), Some(params))

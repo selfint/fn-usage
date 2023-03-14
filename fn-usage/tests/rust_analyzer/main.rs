@@ -21,7 +21,7 @@ async fn _test_rust_analyzer() {
     let (client, handles) = clients::stdio_client(stdin, stdout, stderr);
 
     let init_resp = client
-        .request::<Initialize, InitializeError>(InitializeParams {
+        .request::<Initialize>(InitializeParams {
             root_uri: Some(get_sample_root()),
             capabilities: ClientCapabilities {
                 text_document: Some(TextDocumentClientCapabilities {
@@ -58,7 +58,7 @@ async fn _test_rust_analyzer() {
         result,
         id: _,
     }) = client
-        .request::<FoldingRangeRequest, ()>(FoldingRangeParams {
+        .request::<FoldingRangeRequest>(FoldingRangeParams {
             text_document: TextDocumentIdentifier { uri: uri.clone() },
             partial_result_params: lsp_types::PartialResultParams {
                 partial_result_token: None,

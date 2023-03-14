@@ -39,7 +39,7 @@ async fn main() {
     let (client, handles) = clients::stdio_client(stdin, stdout, stderr);
 
     let response = client
-        .request::<Initialize, InitializeError>(InitializeParams {
+        .request::<Initialize>(InitializeParams {
             root_uri: Some(root_uri.clone()),
             capabilities: ClientCapabilities {
                 text_document: Some(TextDocumentClientCapabilities {
@@ -96,7 +96,7 @@ async fn main() {
         result,
         id: _,
     }) = client
-        .request::<FoldingRangeRequest, ()>(FoldingRangeParams {
+        .request::<FoldingRangeRequest>(FoldingRangeParams {
             text_document: TextDocumentIdentifier { uri: uri.clone() },
             partial_result_params: lsp_types::PartialResultParams {
                 partial_result_token: None,

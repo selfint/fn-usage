@@ -26,7 +26,7 @@ async fn test_rust_analyzer() {
     let (client, handles) = clients::stdio_client(stdin, stdout, stderr);
 
     let init_resp = client
-        .request::<Initialize, InitializeError>(InitializeParams::default())
+        .request::<Initialize>(InitializeParams::default())
         .await;
 
     insta::assert_debug_snapshot!(init_resp);
