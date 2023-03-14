@@ -1,6 +1,6 @@
 use lsp_client::clients;
 use lsp_types::{
-    notification::Initialized, request::Initialize, InitializeError, InitializeParams,
+    notification::Initialized, request::Initialize, InitializeParams,
     InitializedParams,
 };
 use std::process::Stdio;
