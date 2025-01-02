@@ -1,56 +1,73 @@
-use anyhow::Result;
-use jsonrpc::{client::Client as JsonRpcClient, types::Response};
+use anyhow::{Context, Result};
 use lsp_types::{notification::Notification as LspNotification, request::Request as LspRequest};
 use serde::de::DeserializeOwned;
-use tokio::{
-    sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
-    task::JoinHandle,
-};
+use std::sync::mpsc::{Receiver, Sender};
+
+use crate::jsonrpc;
 
 pub struct Client {
-    jsonrpc_client: JsonRpcClient,
-    encoder_handle: JoinHandle<()>,
-}
-
-impl Drop for Client {
-    fn drop(&mut self) {
-        self.encoder_handle.abort();
-    }
+    tx: Sender<String>,
+    rx: Receiver<String>,
+    request_id_counter: i64,
 }
 
 impl Client {
-    pub fn new(client_tx: UnboundedSender<String>, server_rx: UnboundedReceiver<String>) -> Self {
-        let (jsonrpc_client_tx, jsonrpc_client_rx) = unbounded_channel();
-
+    pub fn new(tx: Sender<String>, rx: Receiver<String>) -> Self {
         Self {
-            jsonrpc_client: JsonRpcClient::new(jsonrpc_client_tx, server_rx),
-            encoder_handle: tokio::spawn(Client::lsp_encode(jsonrpc_client_rx, client_tx)),
+            tx,
+            rx,
+            request_id_counter: 0,
         }
     }
 
-    async fn lsp_encode(mut rx: UnboundedReceiver<String>, tx: UnboundedSender<String>) {
-        while let Some(msg) = rx.recv().await {
-            let len = msg.as_bytes().len();
-            let msg = format!("Content-Length: {}\r\n\r\n{}", len, msg);
-            tx.send(msg).expect("failed to send message");
-        }
+    fn lsp_encode(&self, msg: &str) -> String {
+        let len = msg.as_bytes().len();
+        format!("Content-Length: {}\r\n\r\n{}", len, msg)
     }
 
-    pub async fn request<R, E>(&self, params: R::Params) -> Result<Response<R::Result, E>>
+    pub fn request<R, E>(
+        &mut self,
+        params: R::Params,
+    ) -> Result<jsonrpc::JsonRpcResult<R::Result, E>>
     where
         R: LspRequest,
         E: DeserializeOwned,
     {
-        self.jsonrpc_client
-            .request(R::METHOD.to_string(), Some(params))
-            .await
+        let request = jsonrpc::Request {
+            jsonrpc: "2.0".to_string(),
+            method: R::METHOD.to_string(),
+            params: Some(params),
+            id: self.request_id_counter,
+        };
+
+        self.request_id_counter += 1;
+
+        self.tx
+            .send(self.lsp_encode(&serde_json::to_string(&request).context("serializing request")?))
+            .context("sending request")?;
+
+        let response = self.rx.recv().context("receiving response")?;
+
+        let jsonrpc_response: jsonrpc::Response<R::Result, E> =
+            serde_json::from_str(&response).context("deserializing response")?;
+
+        Ok(jsonrpc_response.result)
     }
 
     pub fn notify<R>(&self, params: R::Params) -> Result<()>
     where
         R: LspNotification,
     {
-        self.jsonrpc_client
-            .notify(R::METHOD.to_string(), Some(params))
+        let notification = jsonrpc::Notification {
+            jsonrpc: "2.0".to_string(),
+            method: R::METHOD.to_string(),
+            params: Some(params),
+        };
+
+        self.tx
+            .send(self.lsp_encode(
+                &serde_json::to_string(&notification).context("serializing notification")?,
+            ))
+            .context("sending notification")
     }
 }

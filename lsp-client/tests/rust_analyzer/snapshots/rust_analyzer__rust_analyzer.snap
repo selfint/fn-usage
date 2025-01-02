@@ -4,565 +4,559 @@ expression: init_resp
 snapshot_kind: text
 ---
 Ok(
-    Response {
-        jsonrpc: "2.0",
-        result: Result(
-            InitializeResult {
-                capabilities: ServerCapabilities {
-                    position_encoding: Some(
-                        PositionEncodingKind(
-                            "utf-16",
-                        ),
+    Result(
+        InitializeResult {
+            capabilities: ServerCapabilities {
+                position_encoding: Some(
+                    PositionEncodingKind(
+                        "utf-16",
                     ),
-                    text_document_sync: Some(
-                        Options(
-                            TextDocumentSyncOptions {
-                                open_close: Some(
-                                    true,
-                                ),
-                                change: Some(
-                                    Incremental,
-                                ),
-                                will_save: None,
-                                will_save_wait_until: None,
-                                save: Some(
-                                    SaveOptions(
-                                        SaveOptions {
-                                            include_text: None,
-                                        },
-                                    ),
-                                ),
-                            },
-                        ),
-                    ),
-                    selection_range_provider: Some(
-                        Simple(
-                            true,
-                        ),
-                    ),
-                    hover_provider: Some(
-                        Simple(
-                            true,
-                        ),
-                    ),
-                    completion_provider: Some(
-                        CompletionOptions {
-                            resolve_provider: Some(
-                                false,
-                            ),
-                            trigger_characters: Some(
-                                [
-                                    ":",
-                                    ".",
-                                    "'",
-                                    "(",
-                                ],
-                            ),
-                            all_commit_characters: None,
-                            work_done_progress_options: WorkDoneProgressOptions {
-                                work_done_progress: None,
-                            },
-                            completion_item: Some(
-                                CompletionOptionsCompletionItem {
-                                    label_details_support: Some(
-                                        false,
-                                    ),
-                                },
-                            ),
-                        },
-                    ),
-                    signature_help_provider: Some(
-                        SignatureHelpOptions {
-                            trigger_characters: Some(
-                                [
-                                    "(",
-                                    ",",
-                                    "<",
-                                ],
-                            ),
-                            retrigger_characters: None,
-                            work_done_progress_options: WorkDoneProgressOptions {
-                                work_done_progress: None,
-                            },
-                        },
-                    ),
-                    definition_provider: Some(
-                        Left(
-                            true,
-                        ),
-                    ),
-                    type_definition_provider: Some(
-                        Simple(
-                            true,
-                        ),
-                    ),
-                    implementation_provider: Some(
-                        Simple(
-                            true,
-                        ),
-                    ),
-                    references_provider: Some(
-                        Left(
-                            true,
-                        ),
-                    ),
-                    document_highlight_provider: Some(
-                        Left(
-                            true,
-                        ),
-                    ),
-                    document_symbol_provider: Some(
-                        Left(
-                            true,
-                        ),
-                    ),
-                    workspace_symbol_provider: Some(
-                        Left(
-                            true,
-                        ),
-                    ),
-                    code_action_provider: Some(
-                        Simple(
-                            true,
-                        ),
-                    ),
-                    code_lens_provider: Some(
-                        CodeLensOptions {
-                            resolve_provider: Some(
+                ),
+                text_document_sync: Some(
+                    Options(
+                        TextDocumentSyncOptions {
+                            open_close: Some(
                                 true,
                             ),
+                            change: Some(
+                                Incremental,
+                            ),
+                            will_save: None,
+                            will_save_wait_until: None,
+                            save: Some(
+                                SaveOptions(
+                                    SaveOptions {
+                                        include_text: None,
+                                    },
+                                ),
+                            ),
                         },
                     ),
-                    document_formatting_provider: Some(
-                        Left(
-                            true,
-                        ),
+                ),
+                selection_range_provider: Some(
+                    Simple(
+                        true,
                     ),
-                    document_range_formatting_provider: Some(
-                        Left(
+                ),
+                hover_provider: Some(
+                    Simple(
+                        true,
+                    ),
+                ),
+                completion_provider: Some(
+                    CompletionOptions {
+                        resolve_provider: Some(
                             false,
                         ),
-                    ),
-                    document_on_type_formatting_provider: Some(
-                        DocumentOnTypeFormattingOptions {
-                            first_trigger_character: ".",
-                            more_trigger_character: Some(
-                                [
-                                    "=",
-                                    "<",
-                                    ">",
-                                    "{",
-                                    "(",
-                                    "|",
-                                ],
-                            ),
+                        trigger_characters: Some(
+                            [
+                                ":",
+                                ".",
+                                "'",
+                                "(",
+                            ],
+                        ),
+                        all_commit_characters: None,
+                        work_done_progress_options: WorkDoneProgressOptions {
+                            work_done_progress: None,
                         },
-                    ),
-                    rename_provider: Some(
-                        Right(
-                            RenameOptions {
-                                prepare_provider: Some(
-                                    true,
-                                ),
-                                work_done_progress_options: WorkDoneProgressOptions {
-                                    work_done_progress: None,
-                                },
-                            },
-                        ),
-                    ),
-                    document_link_provider: None,
-                    color_provider: None,
-                    folding_range_provider: Some(
-                        Simple(
-                            true,
-                        ),
-                    ),
-                    declaration_provider: Some(
-                        Simple(
-                            true,
-                        ),
-                    ),
-                    execute_command_provider: None,
-                    workspace: Some(
-                        WorkspaceServerCapabilities {
-                            workspace_folders: Some(
-                                WorkspaceFoldersServerCapabilities {
-                                    supported: Some(
-                                        true,
-                                    ),
-                                    change_notifications: Some(
-                                        Left(
-                                            true,
-                                        ),
-                                    ),
-                                },
-                            ),
-                            file_operations: Some(
-                                WorkspaceFileOperationsServerCapabilities {
-                                    did_create: None,
-                                    will_create: None,
-                                    did_rename: None,
-                                    will_rename: Some(
-                                        FileOperationRegistrationOptions {
-                                            filters: [
-                                                FileOperationFilter {
-                                                    scheme: Some(
-                                                        "file",
-                                                    ),
-                                                    pattern: FileOperationPattern {
-                                                        glob: "**/*.rs",
-                                                        matches: Some(
-                                                            File,
-                                                        ),
-                                                        options: None,
-                                                    },
-                                                },
-                                                FileOperationFilter {
-                                                    scheme: Some(
-                                                        "file",
-                                                    ),
-                                                    pattern: FileOperationPattern {
-                                                        glob: "**",
-                                                        matches: Some(
-                                                            Folder,
-                                                        ),
-                                                        options: None,
-                                                    },
-                                                },
-                                            ],
-                                        },
-                                    ),
-                                    did_delete: None,
-                                    will_delete: None,
-                                },
-                            ),
-                        },
-                    ),
-                    call_hierarchy_provider: Some(
-                        Simple(
-                            true,
-                        ),
-                    ),
-                    semantic_tokens_provider: Some(
-                        SemanticTokensOptions(
-                            SemanticTokensOptions {
-                                work_done_progress_options: WorkDoneProgressOptions {
-                                    work_done_progress: None,
-                                },
-                                legend: SemanticTokensLegend {
-                                    token_types: [
-                                        SemanticTokenType(
-                                            "comment",
-                                        ),
-                                        SemanticTokenType(
-                                            "decorator",
-                                        ),
-                                        SemanticTokenType(
-                                            "enumMember",
-                                        ),
-                                        SemanticTokenType(
-                                            "enum",
-                                        ),
-                                        SemanticTokenType(
-                                            "function",
-                                        ),
-                                        SemanticTokenType(
-                                            "interface",
-                                        ),
-                                        SemanticTokenType(
-                                            "keyword",
-                                        ),
-                                        SemanticTokenType(
-                                            "macro",
-                                        ),
-                                        SemanticTokenType(
-                                            "method",
-                                        ),
-                                        SemanticTokenType(
-                                            "namespace",
-                                        ),
-                                        SemanticTokenType(
-                                            "number",
-                                        ),
-                                        SemanticTokenType(
-                                            "operator",
-                                        ),
-                                        SemanticTokenType(
-                                            "parameter",
-                                        ),
-                                        SemanticTokenType(
-                                            "property",
-                                        ),
-                                        SemanticTokenType(
-                                            "string",
-                                        ),
-                                        SemanticTokenType(
-                                            "struct",
-                                        ),
-                                        SemanticTokenType(
-                                            "typeParameter",
-                                        ),
-                                        SemanticTokenType(
-                                            "variable",
-                                        ),
-                                        SemanticTokenType(
-                                            "angle",
-                                        ),
-                                        SemanticTokenType(
-                                            "arithmetic",
-                                        ),
-                                        SemanticTokenType(
-                                            "attributeBracket",
-                                        ),
-                                        SemanticTokenType(
-                                            "attribute",
-                                        ),
-                                        SemanticTokenType(
-                                            "bitwise",
-                                        ),
-                                        SemanticTokenType(
-                                            "boolean",
-                                        ),
-                                        SemanticTokenType(
-                                            "brace",
-                                        ),
-                                        SemanticTokenType(
-                                            "bracket",
-                                        ),
-                                        SemanticTokenType(
-                                            "builtinAttribute",
-                                        ),
-                                        SemanticTokenType(
-                                            "builtinType",
-                                        ),
-                                        SemanticTokenType(
-                                            "character",
-                                        ),
-                                        SemanticTokenType(
-                                            "colon",
-                                        ),
-                                        SemanticTokenType(
-                                            "comma",
-                                        ),
-                                        SemanticTokenType(
-                                            "comparison",
-                                        ),
-                                        SemanticTokenType(
-                                            "constParameter",
-                                        ),
-                                        SemanticTokenType(
-                                            "const",
-                                        ),
-                                        SemanticTokenType(
-                                            "deriveHelper",
-                                        ),
-                                        SemanticTokenType(
-                                            "derive",
-                                        ),
-                                        SemanticTokenType(
-                                            "dot",
-                                        ),
-                                        SemanticTokenType(
-                                            "escapeSequence",
-                                        ),
-                                        SemanticTokenType(
-                                            "formatSpecifier",
-                                        ),
-                                        SemanticTokenType(
-                                            "generic",
-                                        ),
-                                        SemanticTokenType(
-                                            "invalidEscapeSequence",
-                                        ),
-                                        SemanticTokenType(
-                                            "label",
-                                        ),
-                                        SemanticTokenType(
-                                            "lifetime",
-                                        ),
-                                        SemanticTokenType(
-                                            "logical",
-                                        ),
-                                        SemanticTokenType(
-                                            "macroBang",
-                                        ),
-                                        SemanticTokenType(
-                                            "parenthesis",
-                                        ),
-                                        SemanticTokenType(
-                                            "procMacro",
-                                        ),
-                                        SemanticTokenType(
-                                            "punctuation",
-                                        ),
-                                        SemanticTokenType(
-                                            "selfKeyword",
-                                        ),
-                                        SemanticTokenType(
-                                            "selfTypeKeyword",
-                                        ),
-                                        SemanticTokenType(
-                                            "semicolon",
-                                        ),
-                                        SemanticTokenType(
-                                            "static",
-                                        ),
-                                        SemanticTokenType(
-                                            "toolModule",
-                                        ),
-                                        SemanticTokenType(
-                                            "typeAlias",
-                                        ),
-                                        SemanticTokenType(
-                                            "union",
-                                        ),
-                                        SemanticTokenType(
-                                            "unresolvedReference",
-                                        ),
-                                    ],
-                                    token_modifiers: [
-                                        SemanticTokenModifier(
-                                            "async",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "documentation",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "declaration",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "static",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "defaultLibrary",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "associated",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "attribute",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "callable",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "constant",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "consuming",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "controlFlow",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "crateRoot",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "injected",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "intraDocLink",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "library",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "macro",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "mutable",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "procMacro",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "public",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "reference",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "trait",
-                                        ),
-                                        SemanticTokenModifier(
-                                            "unsafe",
-                                        ),
-                                    ],
-                                },
-                                range: Some(
-                                    true,
-                                ),
-                                full: Some(
-                                    Delta {
-                                        delta: Some(
-                                            true,
-                                        ),
-                                    },
+                        completion_item: Some(
+                            CompletionOptionsCompletionItem {
+                                label_details_support: Some(
+                                    false,
                                 ),
                             },
-                        ),
-                    ),
-                    moniker_provider: None,
-                    linked_editing_range_provider: None,
-                    inline_value_provider: None,
-                    inlay_hint_provider: Some(
-                        Right(
-                            Options(
-                                InlayHintOptions {
-                                    work_done_progress_options: WorkDoneProgressOptions {
-                                        work_done_progress: None,
-                                    },
-                                    resolve_provider: Some(
-                                        false,
-                                    ),
-                                },
-                            ),
-                        ),
-                    ),
-                    diagnostic_provider: Some(
-                        Options(
-                            DiagnosticOptions {
-                                identifier: None,
-                                inter_file_dependencies: true,
-                                workspace_diagnostics: false,
-                                work_done_progress_options: WorkDoneProgressOptions {
-                                    work_done_progress: None,
-                                },
-                            },
-                        ),
-                    ),
-                    experimental: Some(
-                        Object {
-                            "externalDocs": Bool(true),
-                            "hoverRange": Bool(true),
-                            "joinLines": Bool(true),
-                            "matchingBrace": Bool(true),
-                            "moveItem": Bool(true),
-                            "onEnter": Bool(true),
-                            "openCargoToml": Bool(true),
-                            "parentModule": Bool(true),
-                            "runnables": Object {
-                                "kinds": Array [
-                                    String("cargo"),
-                                ],
-                            },
-                            "ssr": Bool(true),
-                            "workspaceSymbolScopeKindFiltering": Bool(true),
-                        },
-                    ),
-                },
-                server_info: Some(
-                    ServerInfo {
-                        name: "rust-analyzer",
-                        version: Some(
-                            "0.0.0 (59bc7b49d0 2024-12-29)",
                         ),
                     },
                 ),
+                signature_help_provider: Some(
+                    SignatureHelpOptions {
+                        trigger_characters: Some(
+                            [
+                                "(",
+                                ",",
+                                "<",
+                            ],
+                        ),
+                        retrigger_characters: None,
+                        work_done_progress_options: WorkDoneProgressOptions {
+                            work_done_progress: None,
+                        },
+                    },
+                ),
+                definition_provider: Some(
+                    Left(
+                        true,
+                    ),
+                ),
+                type_definition_provider: Some(
+                    Simple(
+                        true,
+                    ),
+                ),
+                implementation_provider: Some(
+                    Simple(
+                        true,
+                    ),
+                ),
+                references_provider: Some(
+                    Left(
+                        true,
+                    ),
+                ),
+                document_highlight_provider: Some(
+                    Left(
+                        true,
+                    ),
+                ),
+                document_symbol_provider: Some(
+                    Left(
+                        true,
+                    ),
+                ),
+                workspace_symbol_provider: Some(
+                    Left(
+                        true,
+                    ),
+                ),
+                code_action_provider: Some(
+                    Simple(
+                        true,
+                    ),
+                ),
+                code_lens_provider: Some(
+                    CodeLensOptions {
+                        resolve_provider: Some(
+                            true,
+                        ),
+                    },
+                ),
+                document_formatting_provider: Some(
+                    Left(
+                        true,
+                    ),
+                ),
+                document_range_formatting_provider: Some(
+                    Left(
+                        false,
+                    ),
+                ),
+                document_on_type_formatting_provider: Some(
+                    DocumentOnTypeFormattingOptions {
+                        first_trigger_character: ".",
+                        more_trigger_character: Some(
+                            [
+                                "=",
+                                "<",
+                                ">",
+                                "{",
+                                "(",
+                                "|",
+                            ],
+                        ),
+                    },
+                ),
+                rename_provider: Some(
+                    Right(
+                        RenameOptions {
+                            prepare_provider: Some(
+                                true,
+                            ),
+                            work_done_progress_options: WorkDoneProgressOptions {
+                                work_done_progress: None,
+                            },
+                        },
+                    ),
+                ),
+                document_link_provider: None,
+                color_provider: None,
+                folding_range_provider: Some(
+                    Simple(
+                        true,
+                    ),
+                ),
+                declaration_provider: Some(
+                    Simple(
+                        true,
+                    ),
+                ),
+                execute_command_provider: None,
+                workspace: Some(
+                    WorkspaceServerCapabilities {
+                        workspace_folders: Some(
+                            WorkspaceFoldersServerCapabilities {
+                                supported: Some(
+                                    true,
+                                ),
+                                change_notifications: Some(
+                                    Left(
+                                        true,
+                                    ),
+                                ),
+                            },
+                        ),
+                        file_operations: Some(
+                            WorkspaceFileOperationsServerCapabilities {
+                                did_create: None,
+                                will_create: None,
+                                did_rename: None,
+                                will_rename: Some(
+                                    FileOperationRegistrationOptions {
+                                        filters: [
+                                            FileOperationFilter {
+                                                scheme: Some(
+                                                    "file",
+                                                ),
+                                                pattern: FileOperationPattern {
+                                                    glob: "**/*.rs",
+                                                    matches: Some(
+                                                        File,
+                                                    ),
+                                                    options: None,
+                                                },
+                                            },
+                                            FileOperationFilter {
+                                                scheme: Some(
+                                                    "file",
+                                                ),
+                                                pattern: FileOperationPattern {
+                                                    glob: "**",
+                                                    matches: Some(
+                                                        Folder,
+                                                    ),
+                                                    options: None,
+                                                },
+                                            },
+                                        ],
+                                    },
+                                ),
+                                did_delete: None,
+                                will_delete: None,
+                            },
+                        ),
+                    },
+                ),
+                call_hierarchy_provider: Some(
+                    Simple(
+                        true,
+                    ),
+                ),
+                semantic_tokens_provider: Some(
+                    SemanticTokensOptions(
+                        SemanticTokensOptions {
+                            work_done_progress_options: WorkDoneProgressOptions {
+                                work_done_progress: None,
+                            },
+                            legend: SemanticTokensLegend {
+                                token_types: [
+                                    SemanticTokenType(
+                                        "comment",
+                                    ),
+                                    SemanticTokenType(
+                                        "decorator",
+                                    ),
+                                    SemanticTokenType(
+                                        "enumMember",
+                                    ),
+                                    SemanticTokenType(
+                                        "enum",
+                                    ),
+                                    SemanticTokenType(
+                                        "function",
+                                    ),
+                                    SemanticTokenType(
+                                        "interface",
+                                    ),
+                                    SemanticTokenType(
+                                        "keyword",
+                                    ),
+                                    SemanticTokenType(
+                                        "macro",
+                                    ),
+                                    SemanticTokenType(
+                                        "method",
+                                    ),
+                                    SemanticTokenType(
+                                        "namespace",
+                                    ),
+                                    SemanticTokenType(
+                                        "number",
+                                    ),
+                                    SemanticTokenType(
+                                        "operator",
+                                    ),
+                                    SemanticTokenType(
+                                        "parameter",
+                                    ),
+                                    SemanticTokenType(
+                                        "property",
+                                    ),
+                                    SemanticTokenType(
+                                        "string",
+                                    ),
+                                    SemanticTokenType(
+                                        "struct",
+                                    ),
+                                    SemanticTokenType(
+                                        "typeParameter",
+                                    ),
+                                    SemanticTokenType(
+                                        "variable",
+                                    ),
+                                    SemanticTokenType(
+                                        "angle",
+                                    ),
+                                    SemanticTokenType(
+                                        "arithmetic",
+                                    ),
+                                    SemanticTokenType(
+                                        "attributeBracket",
+                                    ),
+                                    SemanticTokenType(
+                                        "attribute",
+                                    ),
+                                    SemanticTokenType(
+                                        "bitwise",
+                                    ),
+                                    SemanticTokenType(
+                                        "boolean",
+                                    ),
+                                    SemanticTokenType(
+                                        "brace",
+                                    ),
+                                    SemanticTokenType(
+                                        "bracket",
+                                    ),
+                                    SemanticTokenType(
+                                        "builtinAttribute",
+                                    ),
+                                    SemanticTokenType(
+                                        "builtinType",
+                                    ),
+                                    SemanticTokenType(
+                                        "character",
+                                    ),
+                                    SemanticTokenType(
+                                        "colon",
+                                    ),
+                                    SemanticTokenType(
+                                        "comma",
+                                    ),
+                                    SemanticTokenType(
+                                        "comparison",
+                                    ),
+                                    SemanticTokenType(
+                                        "constParameter",
+                                    ),
+                                    SemanticTokenType(
+                                        "const",
+                                    ),
+                                    SemanticTokenType(
+                                        "deriveHelper",
+                                    ),
+                                    SemanticTokenType(
+                                        "derive",
+                                    ),
+                                    SemanticTokenType(
+                                        "dot",
+                                    ),
+                                    SemanticTokenType(
+                                        "escapeSequence",
+                                    ),
+                                    SemanticTokenType(
+                                        "formatSpecifier",
+                                    ),
+                                    SemanticTokenType(
+                                        "generic",
+                                    ),
+                                    SemanticTokenType(
+                                        "invalidEscapeSequence",
+                                    ),
+                                    SemanticTokenType(
+                                        "label",
+                                    ),
+                                    SemanticTokenType(
+                                        "lifetime",
+                                    ),
+                                    SemanticTokenType(
+                                        "logical",
+                                    ),
+                                    SemanticTokenType(
+                                        "macroBang",
+                                    ),
+                                    SemanticTokenType(
+                                        "parenthesis",
+                                    ),
+                                    SemanticTokenType(
+                                        "procMacro",
+                                    ),
+                                    SemanticTokenType(
+                                        "punctuation",
+                                    ),
+                                    SemanticTokenType(
+                                        "selfKeyword",
+                                    ),
+                                    SemanticTokenType(
+                                        "selfTypeKeyword",
+                                    ),
+                                    SemanticTokenType(
+                                        "semicolon",
+                                    ),
+                                    SemanticTokenType(
+                                        "static",
+                                    ),
+                                    SemanticTokenType(
+                                        "toolModule",
+                                    ),
+                                    SemanticTokenType(
+                                        "typeAlias",
+                                    ),
+                                    SemanticTokenType(
+                                        "union",
+                                    ),
+                                    SemanticTokenType(
+                                        "unresolvedReference",
+                                    ),
+                                ],
+                                token_modifiers: [
+                                    SemanticTokenModifier(
+                                        "async",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "documentation",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "declaration",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "static",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "defaultLibrary",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "associated",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "attribute",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "callable",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "constant",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "consuming",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "controlFlow",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "crateRoot",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "injected",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "intraDocLink",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "library",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "macro",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "mutable",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "procMacro",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "public",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "reference",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "trait",
+                                    ),
+                                    SemanticTokenModifier(
+                                        "unsafe",
+                                    ),
+                                ],
+                            },
+                            range: Some(
+                                true,
+                            ),
+                            full: Some(
+                                Delta {
+                                    delta: Some(
+                                        true,
+                                    ),
+                                },
+                            ),
+                        },
+                    ),
+                ),
+                moniker_provider: None,
+                linked_editing_range_provider: None,
+                inline_value_provider: None,
+                inlay_hint_provider: Some(
+                    Right(
+                        Options(
+                            InlayHintOptions {
+                                work_done_progress_options: WorkDoneProgressOptions {
+                                    work_done_progress: None,
+                                },
+                                resolve_provider: Some(
+                                    false,
+                                ),
+                            },
+                        ),
+                    ),
+                ),
+                diagnostic_provider: Some(
+                    Options(
+                        DiagnosticOptions {
+                            identifier: None,
+                            inter_file_dependencies: true,
+                            workspace_diagnostics: false,
+                            work_done_progress_options: WorkDoneProgressOptions {
+                                work_done_progress: None,
+                            },
+                        },
+                    ),
+                ),
+                experimental: Some(
+                    Object {
+                        "externalDocs": Bool(true),
+                        "hoverRange": Bool(true),
+                        "joinLines": Bool(true),
+                        "matchingBrace": Bool(true),
+                        "moveItem": Bool(true),
+                        "onEnter": Bool(true),
+                        "openCargoToml": Bool(true),
+                        "parentModule": Bool(true),
+                        "runnables": Object {
+                            "kinds": Array [
+                                String("cargo"),
+                            ],
+                        },
+                        "ssr": Bool(true),
+                        "workspaceSymbolScopeKindFiltering": Bool(true),
+                    },
+                ),
             },
-        ),
-        id: Some(
-            0,
-        ),
-    },
+            server_info: Some(
+                ServerInfo {
+                    name: "rust-analyzer",
+                    version: Some(
+                        "0.0.0 (59bc7b49d0 2024-12-29)",
+                    ),
+                },
+            ),
+        },
+    ),
 )

@@ -1,3 +1,3 @@
 [workspace]
-members = ["jsonrpc", "lsp-client"]
+members = ["fn-usage", "lsp-client"]
 resolver = "2"
