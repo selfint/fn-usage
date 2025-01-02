@@ -1,6 +1,7 @@
 ---
 source: lsp-client/tests/rust_analyzer/main.rs
 expression: init_resp
+snapshot_kind: text
 ---
 Ok(
     Response {
@@ -8,7 +9,11 @@ Ok(
         result: Result(
             InitializeResult {
                 capabilities: ServerCapabilities {
-                    position_encoding: None,
+                    position_encoding: Some(
+                        PositionEncodingKind(
+                            "utf-16",
+                        ),
+                    ),
                     text_document_sync: Some(
                         Options(
                             TextDocumentSyncOptions {
@@ -42,7 +47,9 @@ Ok(
                     ),
                     completion_provider: Some(
                         CompletionOptions {
-                            resolve_provider: None,
+                            resolve_provider: Some(
+                                false,
+                            ),
                             trigger_characters: Some(
                                 [
                                     ":",
@@ -138,12 +145,15 @@ Ok(
                     ),
                     document_on_type_formatting_provider: Some(
                         DocumentOnTypeFormattingOptions {
-                            first_trigger_character: "=",
+                            first_trigger_character: ".",
                             more_trigger_character: Some(
                                 [
-                                    ".",
+                                    "=",
+                                    "<",
                                     ">",
                                     "{",
+                                    "(",
+                                    "|",
                                 ],
                             ),
                         },
@@ -175,7 +185,18 @@ Ok(
                     execute_command_provider: None,
                     workspace: Some(
                         WorkspaceServerCapabilities {
-                            workspace_folders: None,
+                            workspace_folders: Some(
+                                WorkspaceFoldersServerCapabilities {
+                                    supported: Some(
+                                        true,
+                                    ),
+                                    change_notifications: Some(
+                                        Left(
+                                            true,
+                                        ),
+                                    ),
+                                },
+                            ),
                             file_operations: Some(
                                 WorkspaceFileOperationsServerCapabilities {
                                     did_create: None,
@@ -291,10 +312,10 @@ Ok(
                                             "arithmetic",
                                         ),
                                         SemanticTokenType(
-                                            "attribute",
+                                            "attributeBracket",
                                         ),
                                         SemanticTokenType(
-                                            "attributeBracket",
+                                            "attribute",
                                         ),
                                         SemanticTokenType(
                                             "bitwise",
@@ -330,10 +351,13 @@ Ok(
                                             "constParameter",
                                         ),
                                         SemanticTokenType(
-                                            "derive",
+                                            "const",
                                         ),
                                         SemanticTokenType(
                                             "deriveHelper",
+                                        ),
+                                        SemanticTokenType(
+                                            "derive",
                                         ),
                                         SemanticTokenType(
                                             "dot",
@@ -346,6 +370,9 @@ Ok(
                                         ),
                                         SemanticTokenType(
                                             "generic",
+                                        ),
+                                        SemanticTokenType(
+                                            "invalidEscapeSequence",
                                         ),
                                         SemanticTokenType(
                                             "label",
@@ -363,6 +390,9 @@ Ok(
                                             "parenthesis",
                                         ),
                                         SemanticTokenType(
+                                            "procMacro",
+                                        ),
+                                        SemanticTokenType(
                                             "punctuation",
                                         ),
                                         SemanticTokenType(
@@ -375,10 +405,13 @@ Ok(
                                             "semicolon",
                                         ),
                                         SemanticTokenType(
-                                            "typeAlias",
+                                            "static",
                                         ),
                                         SemanticTokenType(
                                             "toolModule",
+                                        ),
+                                        SemanticTokenType(
+                                            "typeAlias",
                                         ),
                                         SemanticTokenType(
                                             "union",
@@ -388,6 +421,9 @@ Ok(
                                         ),
                                     ],
                                     token_modifiers: [
+                                        SemanticTokenModifier(
+                                            "async",
+                                        ),
                                         SemanticTokenModifier(
                                             "documentation",
                                         ),
@@ -401,7 +437,7 @@ Ok(
                                             "defaultLibrary",
                                         ),
                                         SemanticTokenModifier(
-                                            "async",
+                                            "associated",
                                         ),
                                         SemanticTokenModifier(
                                             "attribute",
@@ -431,7 +467,13 @@ Ok(
                                             "library",
                                         ),
                                         SemanticTokenModifier(
+                                            "macro",
+                                        ),
+                                        SemanticTokenModifier(
                                             "mutable",
+                                        ),
+                                        SemanticTokenModifier(
+                                            "procMacro",
                                         ),
                                         SemanticTokenModifier(
                                             "public",
@@ -470,7 +512,7 @@ Ok(
                                         work_done_progress: None,
                                     },
                                     resolve_provider: Some(
-                                        true,
+                                        false,
                                     ),
                                 },
                             ),
@@ -501,7 +543,7 @@ Ok(
                     ServerInfo {
                         name: "rust-analyzer",
                         version: Some(
-                            "0.3.1258-standalone (43fb9563b 2022-10-23)",
+                            "0.0.0 (59bc7b49d0 2024-12-29)",
                         ),
                     },
                 ),
