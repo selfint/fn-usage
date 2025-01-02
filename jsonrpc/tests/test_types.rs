@@ -95,7 +95,7 @@ fn test_response_serialization() {
     insta::assert_compact_json_snapshot!(
         Response {
             jsonrpc: "2.0".to_string(),
-            result: JsonRpcResult::<(), _>::Error {
+            result: JsonRpcResult::Error::<(), _>  {
                 code: -32601,
                 message: "Method not found".to_string(),
                 data: Some(vec!["Some", "data"])

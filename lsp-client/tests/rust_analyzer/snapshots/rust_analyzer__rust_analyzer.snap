@@ -503,6 +503,7 @@ Ok(
                         ),
                     ),
                     moniker_provider: None,
+                    linked_editing_range_provider: None,
                     inline_value_provider: None,
                     inlay_hint_provider: Some(
                         Right(
@@ -518,7 +519,18 @@ Ok(
                             ),
                         ),
                     ),
-                    linked_editing_range_provider: None,
+                    diagnostic_provider: Some(
+                        Options(
+                            DiagnosticOptions {
+                                identifier: None,
+                                inter_file_dependencies: true,
+                                workspace_diagnostics: false,
+                                work_done_progress_options: WorkDoneProgressOptions {
+                                    work_done_progress: None,
+                                },
+                            },
+                        ),
+                    ),
                     experimental: Some(
                         Object {
                             "externalDocs": Bool(true),
