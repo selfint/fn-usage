@@ -41,7 +41,7 @@ We will build 3 separate projects (_crates_ in Rust terms):
 Let's setup the workspace:
 
 ```sh
-$ cd /path/to/fn-usage/dir
+$ cd /path/to/fn-usage
 $ touch Cargo.toml
 ```
 
