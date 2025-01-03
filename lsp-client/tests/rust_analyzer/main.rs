@@ -1,4 +1,3 @@
-use lsp_client::clients;
 use lsp_types::{
     notification::Initialized, request::Initialize, InitializeError, InitializeParams,
     InitializedParams,
@@ -18,11 +17,9 @@ fn start_rust_analyzer() -> Child {
 fn test_rust_analyzer() {
     let mut child = start_rust_analyzer();
 
-    let stdin = child.stdin.take().unwrap();
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
+    let (tx, rx, handle) = lsp_client::ChildStdioChannel::wrap(&mut child);
 
-    let (mut client, handles, stop_flag) = clients::stdio_client(stdin, stdout, stderr);
+    let mut client = lsp_client::Client::new(tx, rx);
 
     let init_resp = client.request::<Initialize, InitializeError>(InitializeParams::default());
 
@@ -34,9 +31,5 @@ fn test_rust_analyzer() {
     drop(child);
     std::thread::sleep(std::time::Duration::from_millis(100));
 
-    stop_flag.store(true, std::sync::atomic::Ordering::Relaxed);
-
-    for handle in handles {
-        handle.join().expect("failed to join handle");
-    }
+    handle.stop();
 }
