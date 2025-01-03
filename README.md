@@ -52,9 +52,11 @@ And inside the `Cargo.toml` file:
 members = []
 ```
 
-## 1. JSON-RPC types
+## 1. JSON-RPC
 
-While there are other implementations of JSON-RPC types already, they are a bit too complicated for this project.
+While there are other implementations of JSON-RPC types already, they
+are a bit too complicated for this project. Our implementation will
+be very simple.
 
 Setup the crate inside our workspace:
 
@@ -73,41 +75,36 @@ members = [
 
 Run `cargo test` to make sure everything works.
 
-Our implementation will be very simple:
+### Types
 
-### Request
+A very minimal (yet sufficient) implementation of the JSON-RPC types.
 
 ```rs
+// jsonrpc/src/types.rs
+use serde::{Deserialize, Serialize};
+
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(untagged)]
-pub enum Request<T> {
-    Request {
-        jsonrpc: String,
-        method: String,
-        params: Option<T>,
-        id: i32,
-    },
-    Notification {
-        jsonrpc: String,
-        method: String,
-        params: Option<T>,
-    },
+pub struct Request<Params> {
+    pub jsonrpc: String,
+    pub method: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub params: Option<Params>,
+    pub id: i64,
 }
 
-```
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Notification<Params> {
+    pub jsonrpc: String,
+    pub method: String,
+    pub params: Option<Params>,
+}
 
-Notice that we don't limit `Params` to be a proper JSON-RPC params type. Since the protocol itself supports
-validation, the validation will be performed by the server/clients.
-
-### Response
-
-```rs
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Response<T, E> {
-    jsonrpc: String,
+    pub jsonrpc: String,
     #[serde(flatten)]
-    result: JsonRpcResult<T, E>,
-    id: Option<i32>,
+    pub result: JsonRpcResult<T, E>,
+    pub id: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -115,16 +112,29 @@ pub struct Response<T, E> {
 pub enum JsonRpcResult<T, E> {
     Result(T),
     Error {
-        code: i32,
+        code: i64,
         message: String,
         data: Option<E>,
     },
 }
+
+```
+
+Notice that there is no validation between ensuring the correct
+method/param/data types together. We will take care of that in
+the LSP-specific code later.
+
+### Client
+
+```rs
+// jsonrpc/src/client.rs
 ```
 
 That's all. All the code is inside the `lib.rs` file.
 
 > While writing the definitions, I used the [insta](https://github.com/mitsuhiko/insta) library for writing the tests. You can view the tests [here](https://github.com/selfint/fn-usage/blob/7a117e281b4861b97bf2e5913b5cb9b9ee25a2da/jsonrpc-types/src/lib.rs#L39).
+
+### Client
 
 ## 2. LSP Client
 

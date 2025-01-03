@@ -19,9 +19,12 @@ fn test_rust_analyzer() {
 
     let mut client = lsp_client::Client::new(lsp_client::StdIO::new(&mut child));
 
-    let init_resp = client.request::<Initialize, InitializeError>(InitializeParams::default());
+    let init_resp =
+        client.request::<Initialize, InitializeError>(Some(InitializeParams::default()));
 
     insta::assert_debug_snapshot!(init_resp);
 
-    client.notify::<Initialized>(InitializedParams {}).unwrap();
+    client
+        .notify::<Initialized>(Some(InitializedParams {}))
+        .unwrap();
 }

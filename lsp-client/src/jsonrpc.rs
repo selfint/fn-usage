@@ -13,6 +13,7 @@ pub struct Request<Params> {
 pub struct Notification<Params> {
     pub jsonrpc: String,
     pub method: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub params: Option<Params>,
 }
 
@@ -59,6 +60,13 @@ mod tests {
             },
             @r###"{"jsonrpc": "2.0", "method": "method", "params": null, "id": 1}"###
         );
+
+        insta::assert_compact_json_snapshot!(Request::<Option<()>> {
+            jsonrpc: "2.0".to_string(),
+            method: "method".to_string(),
+            params: None,
+            id: 1,
+        },);
     }
 
     #[test]

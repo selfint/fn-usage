@@ -52,6 +52,7 @@ impl crate::client::StringIO for StdIO {
                     let content = String::from_utf8(content).unwrap();
                     return Ok(content);
                 }
+                ([], None, None) => panic!("Unexpected server shut down"),
                 unexpected => panic!("Got unexpected stdout: {:?}", unexpected),
             };
         }

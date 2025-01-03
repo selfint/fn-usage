@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use lsp_types::{notification::Notification as LspNotification, request::Request as LspRequest};
 use serde::de::DeserializeOwned;
+use serde_json::Value;
 
 use crate::jsonrpc;
 
@@ -16,6 +17,17 @@ pub struct Error<D> {
     pub data: D,
 }
 
+impl<D> std::fmt::Display for Error<D>
+where
+    D: std::fmt::Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Error {}: {}", self.code, self.message)
+    }
+}
+
+impl<D> std::error::Error for Error<D> where D: std::fmt::Debug {}
+
 pub struct Client<IO: StringIO> {
     io: IO,
     request_id_counter: i64,
@@ -29,7 +41,10 @@ impl<IO: StringIO> Client<IO> {
         }
     }
 
-    pub fn request<R, E>(&mut self, params: R::Params) -> Result<Result<R::Result, Error<E>>>
+    pub fn request<R, E>(
+        &mut self,
+        params: Option<R::Params>,
+    ) -> Result<Result<R::Result, Error<E>>>
     where
         R: LspRequest,
         E: DeserializeOwned,
@@ -37,11 +52,9 @@ impl<IO: StringIO> Client<IO> {
         let request = jsonrpc::Request {
             jsonrpc: "2.0".to_string(),
             method: R::METHOD.to_string(),
-            params: Some(params),
+            params,
             id: self.request_id_counter,
         };
-
-        self.request_id_counter += 1;
 
         let msg = serde_json::to_string(&request).context("serializing request")?;
 
@@ -53,7 +66,25 @@ impl<IO: StringIO> Client<IO> {
             ))
             .context("sending request")?;
 
-        let response = self.io.recv().context("receiving response")?;
+        eprintln!("Sent: {}", msg);
+
+        let response = loop {
+            let response = self.io.recv().context("receiving response")?;
+
+            eprintln!("Received: {}", response);
+
+            let json_value: Value =
+                serde_json::from_str(&response).context("deserializing response")?;
+
+            // get id
+            if let Some(id) = json_value.get("id").and_then(Value::as_i64) {
+                if id == self.request_id_counter {
+                    break response;
+                }
+            }
+        };
+
+        self.request_id_counter += 1;
 
         let jsonrpc_response: jsonrpc::Response<R::Result, E> =
             serde_json::from_str(&response).context("deserializing response")?;
@@ -72,14 +103,14 @@ impl<IO: StringIO> Client<IO> {
         })
     }
 
-    pub fn notify<R>(&mut self, params: R::Params) -> Result<()>
+    pub fn notify<R>(&mut self, params: Option<R::Params>) -> Result<()>
     where
         R: LspNotification,
     {
         let notification = jsonrpc::Notification {
             jsonrpc: "2.0".to_string(),
             method: R::METHOD.to_string(),
-            params: Some(params),
+            params,
         };
 
         let msg = serde_json::to_string(&notification).context("serializing notification")?;
@@ -90,6 +121,10 @@ impl<IO: StringIO> Client<IO> {
                 msg.as_bytes().len(),
                 msg
             ))
-            .context("sending notification")
+            .context("sending notification")?;
+
+        eprintln!("Sent: {}", msg);
+
+        Ok(())
     }
 }

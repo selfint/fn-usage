@@ -33,6 +33,7 @@ Ok(
                         },
                     ),
                 ),
+                notebook_document_sync: None,
                 selection_range_provider: Some(
                     Simple(
                         true,
