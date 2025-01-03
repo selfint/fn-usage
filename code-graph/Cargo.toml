@@ -1,6 +1,7 @@
 [package]
-name = "fn-usage"
+name = "code-graph"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+lsp-client = { path = "../lsp-client" }

@@ -1,6 +1,6 @@
-mod child_stdio_channel;
 mod client;
 mod jsonrpc;
+mod stdio;
 
-pub use child_stdio_channel::ChildStdioChannel;
-pub use client::Client;
+pub use client::{Client, Error};
+pub use stdio::StdIO;

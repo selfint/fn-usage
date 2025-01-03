@@ -4,7 +4,7 @@ expression: init_resp
 snapshot_kind: text
 ---
 Ok(
-    Result(
+    Ok(
         InitializeResult {
             capabilities: ServerCapabilities {
                 position_encoding: Some(

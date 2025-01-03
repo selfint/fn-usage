@@ -28,11 +28,7 @@ pub struct Response<T, E> {
 #[serde(rename_all = "lowercase")]
 pub enum JsonRpcResult<T, E> {
     Result(T),
-    Error {
-        code: i64,
-        message: String,
-        data: Option<E>,
-    },
+    Error { code: i64, message: String, data: E },
 }
 
 #[cfg(test)]
@@ -165,7 +161,7 @@ mod tests {
         );
 
         insta::assert_debug_snapshot!(
-            serde_json::from_str::<Response<(), Vec<String>>>(r#"{"jsonrpc": "2.0", "error": {"code": -32601, "message": "Method not found", "data": ["Some", "data"]}, "id": null}"#),
+            serde_json::from_str::<Response<(), Option<Vec<String>>>>(r#"{"jsonrpc": "2.0", "error": {"code": -32601, "message": "Method not found", "data": ["Some", "data"]}, "id": null}"#),
             @r###"
         Ok(
             Response {
