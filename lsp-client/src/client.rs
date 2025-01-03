@@ -66,12 +66,12 @@ impl<IO: StringIO> Client<IO> {
             ))
             .context("sending request")?;
 
-        eprintln!("Sent: {}", msg);
+        eprintln!("\t\tSent: {}", msg);
 
         let response = loop {
             let response = self.io.recv().context("receiving response")?;
 
-            eprintln!("Received: {}", response);
+            eprintln!("\t\tReceived: {}", response);
 
             let json_value: Value =
                 serde_json::from_str(&response).context("deserializing response")?;
@@ -123,7 +123,7 @@ impl<IO: StringIO> Client<IO> {
             ))
             .context("sending notification")?;
 
-        eprintln!("Sent: {}", msg);
+        eprintln!("\t\tSent: {}", msg);
 
         Ok(())
     }

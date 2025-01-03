@@ -49,7 +49,7 @@ fn get_connections(
                     refresh_support: Some(true),
                 }),
                 symbol: Some(WorkspaceSymbolClientCapabilities {
-                    dynamic_registration: Some(true),
+                    dynamic_registration: Some(false),
                     resolve_support: Some(WorkspaceSymbolResolveSupportCapability {
                         properties: vec!["location.range".to_string()],
                     }),
@@ -90,10 +90,10 @@ fn get_connections(
             }),
             text_document: Some(TextDocumentClientCapabilities {
                 references: Some(DynamicRegistrationClientCapabilities {
-                    dynamic_registration: Some(true),
+                    dynamic_registration: Some(false),
                 }),
                 definition: Some(GotoCapability {
-                    dynamic_registration: Some(true),
+                    dynamic_registration: Some(false),
                     link_support: Some(true),
                 }),
                 document_symbol: Some(DocumentSymbolClientCapabilities {
@@ -131,15 +131,18 @@ fn get_connections(
                     ..Default::default()
                 }),
                 document_link: Some(DocumentLinkClientCapabilities {
-                    dynamic_registration: Some(true),
+                    dynamic_registration: Some(false),
                     tooltip_support: Some(true),
                 }),
                 type_definition: Some(GotoCapability {
-                    dynamic_registration: Some(true),
+                    dynamic_registration: Some(false),
                     link_support: Some(true),
                 }),
                 selection_range: Some(SelectionRangeClientCapabilities {
-                    dynamic_registration: Some(true),
+                    dynamic_registration: Some(false),
+                }),
+                call_hierarchy: Some(DynamicRegistrationClientCapabilities {
+                    dynamic_registration: Some(false),
                 }),
                 ..Default::default()
             }),
@@ -163,8 +166,16 @@ fn get_connections(
 
     initialize
         .capabilities
-        .workspace_symbol_provider
-        .ok_or_else(|| anyhow::anyhow!("Server is not 'workspace_symbol_provider'"))?;
+        .document_symbol_provider
+        .ok_or_else(|| anyhow::anyhow!("Server is not 'document_symbol_provider'"))?;
+
+    let supports_references = initialize.capabilities.references_provider.is_some();
+    let supports_definition = initialize.capabilities.definition_provider.is_some();
+    let supports_call_hierarchy = initialize.capabilities.call_hierarchy_provider.is_some();
+
+    if !(supports_references || supports_definition || supports_call_hierarchy) {
+        anyhow::bail!("Server does not support references, definition or call hierarchy");
+    }
 
     client
         .notify::<Initialized>(Some(InitializedParams {}))
@@ -176,27 +187,32 @@ fn get_connections(
         .into_iter()
         .filter_map(|e| e.ok())
         .filter(|e| {
-            suffixes
-                .iter()
-                .any(|s| e.path().extension().map_or(false, |ext| *ext == **s))
-                && !ignore
+            if ignore.len() > 0
+                && ignore
                     .iter()
                     .any(|i| e.path().to_str().unwrap().contains(i))
+            {
+                false
+            } else if !suffixes
+                .iter()
+                .any(|s| e.path().extension().map_or(false, |ext| *ext == **s))
+            {
+                false
+            } else {
+                eprintln!("Found file: {:?} ", e.path());
+                true
+            }
         })
     {
         files.push(entry.path().to_path_buf());
-    }
-
-    // log files
-    for file in &files {
-        eprintln!("Found file: {:?}", file);
     }
 
     let mut nodes: HashSet<String> = HashSet::new();
 
     let mut connections: Vec<Connection> = vec![];
 
-    for file in &files {
+    for (i, file) in files.iter().enumerate() {
+        eprintln!("Processing file {}/{}: {:?}", i + 1, files.len(), file);
         let file_uri = path_to_uri(file)?;
 
         let text_document = TextDocumentItem {
@@ -210,8 +226,8 @@ fn get_connections(
             .notify::<DidOpenTextDocument>(Some(DidOpenTextDocumentParams { text_document }))
             .context("Sending DidOpenTextDocument notification")?;
 
-        let Some(DocumentSymbolResponse::Nested(symbols)) = client
-            .request::<DocumentSymbolRequest, ()>(Some(DocumentSymbolParams {
+        let Some(symbols) =
+            client.request::<DocumentSymbolRequest, ()>(Some(DocumentSymbolParams {
                 text_document: TextDocumentIdentifier {
                     uri: file_uri.clone(),
                 },
@@ -226,68 +242,170 @@ fn get_connections(
             continue;
         };
 
-        let kinds = [
-            SymbolKind::CLASS,
-            SymbolKind::METHOD,
-            SymbolKind::CONSTRUCTOR,
-            SymbolKind::FUNCTION,
-            SymbolKind::STRUCT,
-        ];
+        let symbols = match symbols {
+            DocumentSymbolResponse::Flat(_) => todo!(),
+            DocumentSymbolResponse::Nested(vec) => vec,
+        };
 
-        for symbol in symbols {
-            if !kinds.contains(&symbol.kind) {
-                continue;
-            }
+        for (j, symbol) in symbols.iter().enumerate() {
+            eprintln!(
+                "\tProcessing symbol {}/{}: {:?} {:?} at {}:{}:{}",
+                j + 1,
+                symbols.len(),
+                symbol.kind,
+                symbol.name,
+                file_uri.path(),
+                symbol.selection_range.start.line + 1,
+                symbol.selection_range.start.character + 1
+            );
 
-            let dst = file_uri.to_string();
-            nodes.insert(dst.clone());
+            let symbol_uri = file_uri.to_string();
+            nodes.insert(symbol_uri.clone());
 
             let position = Position {
                 line: symbol.selection_range.start.line,
                 character: symbol.selection_range.start.character,
             };
 
-            eprintln!(
-                "Symbol: {:?} ",
-                (file_uri.path(), symbol.kind, symbol.name, position)
-            );
+            if supports_references {
+                if let Some(references) =
+                    client.request::<References, ()>(Some(ReferenceParams {
+                        text_document_position: TextDocumentPositionParams {
+                            text_document: TextDocumentIdentifier {
+                                uri: file_uri.clone(),
+                            },
+                            position,
+                        },
+                        work_done_progress_params: WorkDoneProgressParams {
+                            work_done_token: None,
+                        },
+                        partial_result_params: PartialResultParams {
+                            partial_result_token: None,
+                        },
+                        context: ReferenceContext {
+                            include_declaration: true,
+                        },
+                    }))??
+                {
+                    // get symbol references
+                    for reference in references {
+                        let reference_uri = reference.uri.to_string();
+                        nodes.insert(reference_uri.clone());
 
-            let Some(references) = client.request::<References, ()>(Some(ReferenceParams {
-                text_document_position: TextDocumentPositionParams {
-                    text_document: TextDocumentIdentifier {
-                        uri: file_uri.clone(),
-                    },
-                    position,
-                },
-                work_done_progress_params: WorkDoneProgressParams {
-                    work_done_token: None,
-                },
-                partial_result_params: PartialResultParams {
-                    partial_result_token: None,
-                },
-                context: ReferenceContext {
-                    include_declaration: true,
-                },
-            }))??
-            else {
-                eprintln!("No references");
-                continue;
-            };
+                        if reference_uri != symbol_uri {
+                            connections.push(Connection {
+                                src: reference_uri,
+                                dst: symbol_uri.clone(),
+                            });
+                        }
+                    }
+                }
+            }
 
-            eprintln!("Reference: {:?}", references);
+            if supports_definition {
+                if let Some(definitions) =
+                    client.request::<GotoDefinition, ()>(Some(GotoDefinitionParams {
+                        text_document_position_params: TextDocumentPositionParams {
+                            text_document: TextDocumentIdentifier {
+                                uri: file_uri.clone(),
+                            },
+                            position,
+                        },
+                        work_done_progress_params: WorkDoneProgressParams {
+                            work_done_token: None,
+                        },
+                        partial_result_params: PartialResultParams {
+                            partial_result_token: None,
+                        },
+                    }))??
+                {
+                    let definitions: Vec<Location> = match definitions {
+                        GotoDefinitionResponse::Scalar(_) => todo!(),
+                        GotoDefinitionResponse::Array(vec) => vec,
+                        GotoDefinitionResponse::Link(_) => todo!(),
+                    };
 
-            // get symbol references
-            for reference in references {
-                eprintln!("Reference: {:?}", reference.uri.path());
+                    for definition in definitions {
+                        let definition_uri = definition.uri.to_string();
+                        nodes.insert(definition_uri.clone());
 
-                let src = reference.uri.to_string();
-                nodes.insert(src.clone());
+                        if definition_uri != symbol_uri {
+                            connections.push(Connection {
+                                src: definition_uri,
+                                dst: symbol_uri.clone(),
+                            });
+                        }
+                    }
+                }
+            }
 
-                if src != dst {
-                    connections.push(Connection {
-                        src,
-                        dst: dst.clone(),
-                    });
+            if supports_call_hierarchy {
+                if let Some(call_hierarchy_items) = client.request::<CallHierarchyPrepare, ()>(
+                    Some(CallHierarchyPrepareParams {
+                        text_document_position_params: TextDocumentPositionParams {
+                            text_document: TextDocumentIdentifier {
+                                uri: file_uri.clone(),
+                            },
+                            position,
+                        },
+                        work_done_progress_params: WorkDoneProgressParams {
+                            work_done_token: None,
+                        },
+                    }),
+                )?? {
+                    for item in call_hierarchy_items {
+                        if let Some(incoming_calls) = client
+                            .request::<CallHierarchyIncomingCalls, ()>(Some(
+                                CallHierarchyIncomingCallsParams {
+                                    item: item.clone(),
+                                    partial_result_params: PartialResultParams {
+                                        partial_result_token: None,
+                                    },
+                                    work_done_progress_params: WorkDoneProgressParams {
+                                        work_done_token: None,
+                                    },
+                                },
+                            ))??
+                        {
+                            for call in incoming_calls {
+                                let caller_uri = call.from.uri.to_string();
+                                nodes.insert(caller_uri.clone());
+
+                                if caller_uri != symbol_uri {
+                                    connections.push(Connection {
+                                        src: caller_uri.clone(),
+                                        dst: symbol_uri.clone(),
+                                    });
+                                }
+                            }
+                        }
+
+                        // if let Some(outgoing_calls) = client
+                        //     .request::<CallHierarchyOutgoingCalls, ()>(Some(
+                        //         CallHierarchyOutgoingCallsParams {
+                        //             item,
+                        //             partial_result_params: PartialResultParams {
+                        //                 partial_result_token: None,
+                        //             },
+                        //             work_done_progress_params: WorkDoneProgressParams {
+                        //                 work_done_token: None,
+                        //             },
+                        //         },
+                        //     ))??
+                        // {
+                        //     for call in outgoing_calls {
+                        //         let target_uri = call.to.uri.to_string();
+                        //         nodes.insert(target_uri.clone());
+
+                        //         if target_uri != symbol_uri {
+                        //             connections.push(Connection {
+                        //                 src: symbol_uri.clone(),
+                        //                 dst: target_uri,
+                        //             });
+                        //         }
+                        //     }
+                        // }
+                    }
                 }
             }
         }
@@ -354,8 +472,14 @@ fn main() -> Result<()> {
     }
 
     let base = &args[1];
-    let suffix = &args[2];
-    let ignore = &args[3];
+    let suffix = &args[2]
+        .split(";")
+        .filter(|s| s.len() > 0)
+        .collect::<Vec<_>>();
+    let ignore = &args[3]
+        .split(";")
+        .filter(|i| i.len() > 0)
+        .collect::<Vec<_>>();
     let cmd = &args[4];
     let args = &args[5..];
 
@@ -382,7 +506,7 @@ fn main() -> Result<()> {
         }
     });
 
-    let (nodes, connections) = get_connections(&mut client, &base_path, &[&suffix], &[&ignore])
+    let (nodes, connections) = get_connections(&mut client, &base_path, &suffix, &ignore)
         .context("failed to get connections")?;
 
     // print graphviz .dot file
