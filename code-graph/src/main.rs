@@ -226,6 +226,9 @@ fn get_connections(
             .notify::<DidOpenTextDocument>(Some(DidOpenTextDocumentParams { text_document }))
             .context("Sending DidOpenTextDocument notification")?;
 
+        // sleep 3 seconds
+        std::thread::sleep(std::time::Duration::from_secs(3));
+
         let Some(symbols) =
             client.request::<DocumentSymbolRequest, ()>(Some(DocumentSymbolParams {
                 text_document: TextDocumentIdentifier {
@@ -319,14 +322,18 @@ fn get_connections(
                         },
                     }))??
                 {
-                    let definitions: Vec<Location> = match definitions {
-                        GotoDefinitionResponse::Scalar(_) => todo!(),
-                        GotoDefinitionResponse::Array(vec) => vec,
-                        GotoDefinitionResponse::Link(_) => todo!(),
+                    let definitions = match definitions {
+                        GotoDefinitionResponse::Scalar(location) => vec![location.uri],
+                        GotoDefinitionResponse::Array(vec) => {
+                            vec.into_iter().map(|l| l.uri).collect()
+                        }
+                        GotoDefinitionResponse::Link(vec) => {
+                            vec.into_iter().map(|l| l.target_uri).collect()
+                        }
                     };
 
                     for definition in definitions {
-                        let definition_uri = definition.uri.to_string();
+                        let definition_uri = definition.to_string();
                         nodes.insert(definition_uri.clone());
 
                         if definition_uri != symbol_uri {
