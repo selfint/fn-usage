@@ -19,6 +19,7 @@ fn start_lsp_server(cmd: &str, args: &[String]) -> Child {
         .expect("failed to start lsp server")
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct Connection {
     pub src: String,
     pub dst: String,
@@ -164,17 +165,12 @@ fn get_connections(
 
     let initialize = client.request::<Initialize, InitializeError>(Some(initialize_params))??;
 
-    initialize
-        .capabilities
-        .document_symbol_provider
-        .ok_or_else(|| anyhow::anyhow!("Server is not 'document_symbol_provider'"))?;
+    if initialize.capabilities.document_symbol_provider.is_none() {
+        anyhow::bail!("Server is not 'documentSymbol' provider");
+    }
 
-    let supports_references = initialize.capabilities.references_provider.is_some();
-    let supports_definition = initialize.capabilities.definition_provider.is_some();
-    let supports_call_hierarchy = initialize.capabilities.call_hierarchy_provider.is_some();
-
-    if !(supports_references || supports_definition || supports_call_hierarchy) {
-        anyhow::bail!("Server does not support references, definition or call hierarchy");
+    if initialize.capabilities.references_provider.is_none() {
+        anyhow::bail!("Server does not support 'references' provider");
     }
 
     client
@@ -208,12 +204,12 @@ fn get_connections(
     }
 
     let mut nodes: HashSet<String> = HashSet::new();
-
-    let mut connections: Vec<Connection> = vec![];
+    let mut connections: HashSet<Connection> = HashSet::new();
 
     for (i, file) in files.iter().enumerate() {
         eprintln!("Processing file {}/{}: {:?}", i + 1, files.len(), file);
         let file_uri = path_to_uri(file)?;
+        let symbol_uri = file_uri.to_string();
 
         let text_document = TextDocumentItem {
             uri: file_uri.clone(),
@@ -251,6 +247,8 @@ fn get_connections(
         };
 
         for (j, symbol) in symbols.iter().enumerate() {
+            nodes.insert(symbol_uri.clone());
+
             eprintln!(
                 "\tProcessing symbol {}/{}: {:?} {:?} at {}:{}:{}",
                 j + 1,
@@ -262,211 +260,66 @@ fn get_connections(
                 symbol.selection_range.start.character + 1
             );
 
-            let symbol_uri = file_uri.to_string();
-            nodes.insert(symbol_uri.clone());
-
-            let position = Position {
-                line: symbol.selection_range.start.line,
-                character: symbol.selection_range.start.character,
+            let Some(references) = client.request::<References, ()>(Some(ReferenceParams {
+                text_document_position: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier {
+                        uri: file_uri.clone(),
+                    },
+                    position: Position {
+                        line: symbol.selection_range.start.line,
+                        character: symbol.selection_range.start.character,
+                    },
+                },
+                work_done_progress_params: WorkDoneProgressParams {
+                    work_done_token: None,
+                },
+                partial_result_params: PartialResultParams {
+                    partial_result_token: None,
+                },
+                context: ReferenceContext {
+                    include_declaration: true,
+                },
+            }))??
+            else {
+                continue;
             };
 
-            if supports_references {
-                if let Some(references) =
-                    client.request::<References, ()>(Some(ReferenceParams {
-                        text_document_position: TextDocumentPositionParams {
-                            text_document: TextDocumentIdentifier {
-                                uri: file_uri.clone(),
-                            },
-                            position,
-                        },
-                        work_done_progress_params: WorkDoneProgressParams {
-                            work_done_token: None,
-                        },
-                        partial_result_params: PartialResultParams {
-                            partial_result_token: None,
-                        },
-                        context: ReferenceContext {
-                            include_declaration: true,
-                        },
-                    }))??
-                {
-                    // get symbol references
-                    for reference in references {
-                        let reference_uri = reference.uri.to_string();
-                        nodes.insert(reference_uri.clone());
+            for reference in references {
+                let reference_uri = reference.uri.to_string();
+                nodes.insert(reference_uri.clone());
 
-                        if reference_uri != symbol_uri {
-                            connections.push(Connection {
-                                src: reference_uri,
-                                dst: symbol_uri.clone(),
-                            });
-                        }
-                    }
-                }
-            }
-
-            if supports_definition {
-                if let Some(definitions) =
-                    client.request::<GotoDefinition, ()>(Some(GotoDefinitionParams {
-                        text_document_position_params: TextDocumentPositionParams {
-                            text_document: TextDocumentIdentifier {
-                                uri: file_uri.clone(),
-                            },
-                            position,
-                        },
-                        work_done_progress_params: WorkDoneProgressParams {
-                            work_done_token: None,
-                        },
-                        partial_result_params: PartialResultParams {
-                            partial_result_token: None,
-                        },
-                    }))??
-                {
-                    let definitions = match definitions {
-                        GotoDefinitionResponse::Scalar(location) => vec![location.uri],
-                        GotoDefinitionResponse::Array(vec) => {
-                            vec.into_iter().map(|l| l.uri).collect()
-                        }
-                        GotoDefinitionResponse::Link(vec) => {
-                            vec.into_iter().map(|l| l.target_uri).collect()
-                        }
-                    };
-
-                    for definition in definitions {
-                        let definition_uri = definition.to_string();
-                        nodes.insert(definition_uri.clone());
-
-                        if definition_uri != symbol_uri {
-                            connections.push(Connection {
-                                src: definition_uri,
-                                dst: symbol_uri.clone(),
-                            });
-                        }
-                    }
-                }
-            }
-
-            if supports_call_hierarchy {
-                if let Some(call_hierarchy_items) = client.request::<CallHierarchyPrepare, ()>(
-                    Some(CallHierarchyPrepareParams {
-                        text_document_position_params: TextDocumentPositionParams {
-                            text_document: TextDocumentIdentifier {
-                                uri: file_uri.clone(),
-                            },
-                            position,
-                        },
-                        work_done_progress_params: WorkDoneProgressParams {
-                            work_done_token: None,
-                        },
-                    }),
-                )?? {
-                    for item in call_hierarchy_items {
-                        if let Some(incoming_calls) = client
-                            .request::<CallHierarchyIncomingCalls, ()>(Some(
-                                CallHierarchyIncomingCallsParams {
-                                    item: item.clone(),
-                                    partial_result_params: PartialResultParams {
-                                        partial_result_token: None,
-                                    },
-                                    work_done_progress_params: WorkDoneProgressParams {
-                                        work_done_token: None,
-                                    },
-                                },
-                            ))??
-                        {
-                            for call in incoming_calls {
-                                let caller_uri = call.from.uri.to_string();
-                                nodes.insert(caller_uri.clone());
-
-                                if caller_uri != symbol_uri {
-                                    connections.push(Connection {
-                                        src: caller_uri.clone(),
-                                        dst: symbol_uri.clone(),
-                                    });
-                                }
-                            }
-                        }
-
-                        // if let Some(outgoing_calls) = client
-                        //     .request::<CallHierarchyOutgoingCalls, ()>(Some(
-                        //         CallHierarchyOutgoingCallsParams {
-                        //             item,
-                        //             partial_result_params: PartialResultParams {
-                        //                 partial_result_token: None,
-                        //             },
-                        //             work_done_progress_params: WorkDoneProgressParams {
-                        //                 work_done_token: None,
-                        //             },
-                        //         },
-                        //     ))??
-                        // {
-                        //     for call in outgoing_calls {
-                        //         let target_uri = call.to.uri.to_string();
-                        //         nodes.insert(target_uri.clone());
-
-                        //         if target_uri != symbol_uri {
-                        //             connections.push(Connection {
-                        //                 src: symbol_uri.clone(),
-                        //                 dst: target_uri,
-                        //             });
-                        //         }
-                        //     }
-                        // }
-                    }
+                if reference_uri != symbol_uri {
+                    connections.insert(Connection {
+                        src: reference_uri,
+                        dst: symbol_uri.clone(),
+                    });
                 }
             }
         }
-
-        client
-            .notify::<DidCloseTextDocument>(Some(DidCloseTextDocumentParams {
-                text_document: TextDocumentIdentifier { uri: file_uri },
-            }))
-            .context("Sending DidCloseTextDocument notification")?;
     }
 
-    let dedup_connections = connections
-        .iter()
-        .map(|c| (c.src.clone(), c.dst.clone()))
-        .collect::<std::collections::HashSet<_>>()
-        .iter()
-        .map(|(src, dst)| Connection {
-            src: src.clone(),
-            dst: dst.clone(),
-        })
-        .collect::<Vec<_>>();
-
     // strip root uri from all connections
-    let stripped_connections = dedup_connections
+    let root = root_uri.to_string();
+    let connections = connections
         .into_iter()
-        // keep only src/dst that start with root_uri
-        .filter(|c| {
-            c.src.starts_with(&root_uri.to_string()) && c.dst.starts_with(&root_uri.to_string())
-        })
-        .map(|c| Connection {
-            src: c
-                .src
-                .strip_prefix(&root_uri.to_string())
-                .unwrap_or(&c.src)
-                .to_string(),
-            dst: c
-                .dst
-                .strip_prefix(&root_uri.to_string())
-                .unwrap_or(&c.dst)
-                .to_string(),
+        .filter_map(|c| {
+            if let (Some(src), Some(dst)) = (c.src.strip_prefix(&root), c.dst.strip_prefix(&root)) {
+                Some(Connection {
+                    src: src.to_string(),
+                    dst: dst.to_string(),
+                })
+            } else {
+                None
+            }
         })
         .collect::<Vec<_>>();
 
-    let stripped_nodes = nodes
-        .iter()
-        .filter(|n| n.starts_with(&root_uri.to_string()))
-        .map(|n| {
-            n.strip_prefix(&root_uri.to_string())
-                .unwrap_or(n)
-                .to_string()
-        })
+    let nodes = nodes
+        .into_iter()
+        .filter_map(|n| n.strip_prefix(&root).map(|s| s.to_string()))
         .collect::<Vec<_>>();
 
-    Ok((stripped_nodes, stripped_connections))
+    Ok((nodes, connections))
 }
 
 fn main() -> Result<()> {
