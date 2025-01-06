@@ -76,9 +76,14 @@ impl<IO: StringIO> Client<IO> {
             let json_value: Value =
                 serde_json::from_str(&response).context("deserializing response")?;
 
-            // get id
+            // check if this is our response
             if let Some(id) = json_value.get("id").and_then(Value::as_i64) {
                 if id == self.request_id_counter {
+                    // this is a server sent method - not our response
+                    if json_value.get("method").is_some() {
+                        continue;
+                    }
+
                     break response;
                 }
             }
