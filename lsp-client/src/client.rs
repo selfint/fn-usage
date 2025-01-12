@@ -13,12 +13,18 @@ pub trait StringIO {
 pub struct Error {
     code: i64,
     message: String,
-    data: serde_json::Value,
+    data: Option<serde_json::Value>,
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Error {} - {}: {}", self.code, self.message, self.data)
+        write!(
+            f,
+            "Error {} - {}: {}",
+            self.code,
+            self.message,
+            self.data.as_ref().unwrap_or(&serde_json::json!(null))
+        )
     }
 }
 
@@ -27,13 +33,15 @@ impl std::error::Error for Error {}
 pub struct Client<IO: StringIO> {
     io: IO,
     request_id_counter: i64,
+    verbose: bool,
 }
 
 impl<IO: StringIO> Client<IO> {
-    pub fn new(io: IO) -> Self {
+    pub fn new(io: IO, verbose: bool) -> Self {
         Self {
             io,
             request_id_counter: 0,
+            verbose,
         }
     }
 
@@ -58,15 +66,19 @@ impl<IO: StringIO> Client<IO> {
             ))
             .context("sending request")?;
 
-        eprintln!("\t\tSent: {}", msg);
+        if self.verbose {
+            eprintln!("\t\tSent: {}", msg);
+        }
 
         let response = loop {
             let response = self.io.recv().context("receiving response")?;
 
-            eprintln!("\t\tReceived: {}", response);
+            if self.verbose {
+                eprintln!("\t\tReceived: {}", response);
+            }
 
-            let json_value: Value =
-                serde_json::from_str(&response).context("deserializing response")?;
+            let json_value: Value = serde_json::from_str(&response)
+                .context(format!("deserializing response: {}", &response))?;
 
             // check if this is our response
             if let Some(id) = json_value.get("id").and_then(Value::as_i64) {
@@ -84,7 +96,8 @@ impl<IO: StringIO> Client<IO> {
         self.request_id_counter += 1;
 
         let jsonrpc_response: jsonrpc::Response<R::Result, serde_json::Value> =
-            serde_json::from_str(&response).context("deserializing response")?;
+            serde_json::from_str(&response)
+                .context(format!("deserializing response: {}", &response))?;
 
         match jsonrpc_response.result {
             jsonrpc::JsonRpcResult::Result(result) => Ok(result),
@@ -121,7 +134,9 @@ impl<IO: StringIO> Client<IO> {
             ))
             .context("sending notification")?;
 
-        eprintln!("\t\tSent: {}", msg);
+        if self.verbose {
+            eprintln!("\t\tSent: {}", msg);
+        }
 
         Ok(())
     }

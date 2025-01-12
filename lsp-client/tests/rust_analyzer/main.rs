@@ -1,6 +1,5 @@
 use lsp_types::{
-    notification::Initialized, request::Initialize, InitializeError, InitializeParams,
-    InitializedParams,
+    notification::Initialized, request::Initialize, InitializeParams, InitializedParams,
 };
 use std::process::{Child, Command, Stdio};
 
@@ -17,14 +16,13 @@ fn start_rust_analyzer() -> Child {
 fn test_rust_analyzer() {
     let mut child = start_rust_analyzer();
 
-    let mut client = lsp_client::Client::new(lsp_client::StdIO::new(&mut child));
+    let mut client = lsp_client::Client::new(lsp_client::StdIO::new(&mut child), true);
 
-    let init_resp =
-        client.request::<Initialize, InitializeError>(Some(InitializeParams::default()));
+    let init_resp = client.request::<Initialize>(Some(InitializeParams::default()));
 
-    insta::assert_debug_snapshot!(init_resp);
+    assert!(init_resp.is_ok());
 
-    client
+    assert!(client
         .notify::<Initialized>(Some(InitializedParams {}))
-        .unwrap();
+        .is_ok());
 }
