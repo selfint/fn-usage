@@ -10,17 +10,15 @@ pub trait StringIO {
 }
 
 #[derive(Debug)]
-pub enum Error {
-    Transport,
-    LSP { code: i64, message: String },
+pub struct Error {
+    code: i64,
+    message: String,
+    data: serde_json::Value,
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::Transport => write!(f, "Transport error"),
-            Error::LSP { code, message } => write!(f, "Error {}: {}", code, message),
-        }
+        write!(f, "Error {} - {}: {}", self.code, self.message, self.data)
     }
 }
 
@@ -93,8 +91,13 @@ impl<IO: StringIO> Client<IO> {
             jsonrpc::JsonRpcResult::Error {
                 code,
                 message,
-                data: _,
-            } => Err((Error::LSP { code, message }).into()),
+                data,
+            } => Err((Error {
+                code,
+                message,
+                data,
+            })
+            .into()),
         }
     }
 

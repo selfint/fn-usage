@@ -43,19 +43,10 @@ fn get_connections(
     let root_uri = path_to_uri(base_path)?;
 
     let initialize_params: InitializeParams = serde_json::from_value(serde_json::json!({
-        "window": {
-            "workDoneProgress": true,
-        },
         "capabilities": {
             "textDocument": {
-                "references": {
-                    "dynamicRegistration": false
-                },
                 "documentSymbol": {
                     "hierarchicalDocumentSymbolSupport": true,
-                },
-                "selectionRange": {
-                    "dynamicRegistration": false
                 },
             }
         },
@@ -72,7 +63,7 @@ fn get_connections(
     }
 
     if initialize.capabilities.references_provider.is_none() {
-        anyhow::bail!("Server does not support 'references' provider");
+        anyhow::bail!("Server is not 'references' provider");
     }
 
     client
