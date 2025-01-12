@@ -42,128 +42,30 @@ fn get_connections(
 ) -> Result<(Vec<String>, Vec<Connection>)> {
     let root_uri = path_to_uri(base_path)?;
 
-    let initialize_params = InitializeParams {
-        capabilities: ClientCapabilities {
-            workspace: Some(WorkspaceClientCapabilities {
-                workspace_folders: Some(false),
-                semantic_tokens: Some(SemanticTokensWorkspaceClientCapabilities {
-                    refresh_support: Some(true),
-                }),
-                symbol: Some(WorkspaceSymbolClientCapabilities {
-                    dynamic_registration: Some(false),
-                    resolve_support: Some(WorkspaceSymbolResolveSupportCapability {
-                        properties: vec!["location.range".to_string()],
-                    }),
-                    tag_support: None,
-                    symbol_kind: Some(SymbolKindCapability {
-                        value_set: Some(vec![
-                            SymbolKind::FILE,
-                            SymbolKind::MODULE,
-                            SymbolKind::NAMESPACE,
-                            SymbolKind::PACKAGE,
-                            SymbolKind::CLASS,
-                            SymbolKind::METHOD,
-                            SymbolKind::PROPERTY,
-                            SymbolKind::FIELD,
-                            SymbolKind::CONSTRUCTOR,
-                            SymbolKind::ENUM,
-                            SymbolKind::INTERFACE,
-                            SymbolKind::FUNCTION,
-                            SymbolKind::VARIABLE,
-                            SymbolKind::CONSTANT,
-                            SymbolKind::STRING,
-                            SymbolKind::NUMBER,
-                            SymbolKind::BOOLEAN,
-                            SymbolKind::ARRAY,
-                            SymbolKind::OBJECT,
-                            SymbolKind::KEY,
-                            SymbolKind::NULL,
-                            SymbolKind::ENUM_MEMBER,
-                            SymbolKind::STRUCT,
-                            SymbolKind::EVENT,
-                            SymbolKind::OPERATOR,
-                            SymbolKind::TYPE_PARAMETER,
-                        ]),
-                    }),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }),
-            text_document: Some(TextDocumentClientCapabilities {
-                references: Some(DynamicRegistrationClientCapabilities {
-                    dynamic_registration: Some(false),
-                }),
-                definition: Some(GotoCapability {
-                    dynamic_registration: Some(false),
-                    link_support: Some(true),
-                }),
-                document_symbol: Some(DocumentSymbolClientCapabilities {
-                    hierarchical_document_symbol_support: Some(true),
-                    symbol_kind: Some(SymbolKindCapability {
-                        value_set: Some(vec![
-                            SymbolKind::FILE,
-                            SymbolKind::MODULE,
-                            SymbolKind::NAMESPACE,
-                            SymbolKind::PACKAGE,
-                            SymbolKind::CLASS,
-                            SymbolKind::METHOD,
-                            SymbolKind::PROPERTY,
-                            SymbolKind::FIELD,
-                            SymbolKind::CONSTRUCTOR,
-                            SymbolKind::ENUM,
-                            SymbolKind::INTERFACE,
-                            SymbolKind::FUNCTION,
-                            SymbolKind::VARIABLE,
-                            SymbolKind::CONSTANT,
-                            SymbolKind::STRING,
-                            SymbolKind::NUMBER,
-                            SymbolKind::BOOLEAN,
-                            SymbolKind::ARRAY,
-                            SymbolKind::OBJECT,
-                            SymbolKind::KEY,
-                            SymbolKind::NULL,
-                            SymbolKind::ENUM_MEMBER,
-                            SymbolKind::STRUCT,
-                            SymbolKind::EVENT,
-                            SymbolKind::OPERATOR,
-                            SymbolKind::TYPE_PARAMETER,
-                        ]),
-                    }),
-                    ..Default::default()
-                }),
-                document_link: Some(DocumentLinkClientCapabilities {
-                    dynamic_registration: Some(false),
-                    tooltip_support: Some(true),
-                }),
-                type_definition: Some(GotoCapability {
-                    dynamic_registration: Some(false),
-                    link_support: Some(true),
-                }),
-                selection_range: Some(SelectionRangeClientCapabilities {
-                    dynamic_registration: Some(false),
-                }),
-                call_hierarchy: Some(DynamicRegistrationClientCapabilities {
-                    dynamic_registration: Some(false),
-                }),
-                ..Default::default()
-            }),
-            ..Default::default()
+    let initialize_params: InitializeParams = serde_json::from_value(serde_json::json!({
+        "window": {
+            "workDoneProgress": true,
         },
-        // notify lsp we opened workspace folder
-        workspace_folders: Some(vec![WorkspaceFolder {
-            uri: root_uri.clone(),
-            name: base_path
-                .clone()
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string(),
-        }]),
-        ..Default::default()
-    };
+        "capabilities": {
+            "textDocument": {
+                "references": {
+                    "dynamicRegistration": false
+                },
+                "documentSymbol": {
+                    "hierarchicalDocumentSymbolSupport": true,
+                },
+                "selectionRange": {
+                    "dynamicRegistration": false
+                },
+            }
+        },
+        "workspaceFolders": [{
+            "uri": root_uri,
+            "name": "name"
+        }]
+    }))?;
 
-    let initialize = client.request::<Initialize, InitializeError>(Some(initialize_params))??;
+    let initialize = client.request::<Initialize>(Some(initialize_params))?;
 
     if initialize.capabilities.document_symbol_provider.is_none() {
         anyhow::bail!("Server is not 'documentSymbol' provider");
@@ -176,6 +78,9 @@ fn get_connections(
     client
         .notify::<Initialized>(Some(InitializedParams {}))
         .context("Sending Initialized notification")?;
+
+    // give server time to index project
+    std::thread::sleep(std::time::Duration::from_secs(3));
 
     // get all files with suffixes in base path recursively
     let mut files = vec![];
@@ -222,21 +127,13 @@ fn get_connections(
             .notify::<DidOpenTextDocument>(Some(DidOpenTextDocumentParams { text_document }))
             .context("Sending DidOpenTextDocument notification")?;
 
-        // sleep 3 seconds
-        std::thread::sleep(std::time::Duration::from_secs(3));
-
-        let Some(symbols) =
-            client.request::<DocumentSymbolRequest, ()>(Some(DocumentSymbolParams {
-                text_document: TextDocumentIdentifier {
-                    uri: file_uri.clone(),
+        let Some(symbols) = client.request::<DocumentSymbolRequest>(Some(
+            serde_json::from_value(serde_json::json!({
+                "textDocument": {
+                    "uri": file_uri.clone(),
                 },
-                work_done_progress_params: WorkDoneProgressParams {
-                    work_done_token: None,
-                },
-                partial_result_params: PartialResultParams {
-                    partial_result_token: None,
-                },
-            }))??
+            }))?,
+        ))?
         else {
             continue;
         };
@@ -246,40 +143,22 @@ fn get_connections(
             DocumentSymbolResponse::Nested(vec) => vec,
         };
 
-        for (j, symbol) in symbols.iter().enumerate() {
+        for symbol in symbols.iter() {
             nodes.insert(symbol_uri.clone());
 
-            eprintln!(
-                "\tProcessing symbol {}/{}: {:?} {:?} at {}:{}:{}",
-                j + 1,
-                symbols.len(),
-                symbol.kind,
-                symbol.name,
-                file_uri.path(),
-                symbol.selection_range.start.line + 1,
-                symbol.selection_range.start.character + 1
-            );
-
-            let Some(references) = client.request::<References, ()>(Some(ReferenceParams {
-                text_document_position: TextDocumentPositionParams {
-                    text_document: TextDocumentIdentifier {
-                        uri: file_uri.clone(),
+            let Some(references) =
+                client.request::<References>(Some(serde_json::from_value(serde_json::json!({
+                    "textDocument": {
+                        "uri": file_uri.clone(),
                     },
-                    position: Position {
-                        line: symbol.selection_range.start.line,
-                        character: symbol.selection_range.start.character,
+                    "position": {
+                        "line": symbol.selection_range.start.line,
+                        "character": symbol.selection_range.start.character,
                     },
-                },
-                work_done_progress_params: WorkDoneProgressParams {
-                    work_done_token: None,
-                },
-                partial_result_params: PartialResultParams {
-                    partial_result_token: None,
-                },
-                context: ReferenceContext {
-                    include_declaration: true,
-                },
-            }))??
+                    "context": {
+                        "includeDeclaration": false,
+                    },
+                }))?))?
             else {
                 continue;
             };
@@ -371,7 +250,7 @@ fn main() -> Result<()> {
 
     // print graphviz .dot file
     println!("digraph G {{");
-    println!("    rankdir=LR;");
+    println!("    rankdir=TB;");
     println!("    node [shape=rect];");
     // println!("    nodesep=0.1;");
     // println!("    ranksep=0.1;");

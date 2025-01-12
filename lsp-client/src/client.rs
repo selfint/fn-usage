@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use lsp_types::{notification::Notification as LspNotification, request::Request as LspRequest};
-use serde::de::DeserializeOwned;
 use serde_json::Value;
 
 use crate::jsonrpc;
@@ -11,22 +10,21 @@ pub trait StringIO {
 }
 
 #[derive(Debug)]
-pub struct Error<D> {
-    pub code: i64,
-    pub message: String,
-    pub data: D,
+pub enum Error {
+    Transport,
+    LSP { code: i64, message: String },
 }
 
-impl<D> std::fmt::Display for Error<D>
-where
-    D: std::fmt::Debug,
-{
+impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Error {}: {}", self.code, self.message)
+        match self {
+            Error::Transport => write!(f, "Transport error"),
+            Error::LSP { code, message } => write!(f, "Error {}: {}", code, message),
+        }
     }
 }
 
-impl<D> std::error::Error for Error<D> where D: std::fmt::Debug {}
+impl std::error::Error for Error {}
 
 pub struct Client<IO: StringIO> {
     io: IO,
@@ -41,13 +39,9 @@ impl<IO: StringIO> Client<IO> {
         }
     }
 
-    pub fn request<R, E>(
-        &mut self,
-        params: Option<R::Params>,
-    ) -> Result<Result<R::Result, Error<E>>>
+    pub fn request<R>(&mut self, params: Option<R::Params>) -> Result<R::Result>
     where
         R: LspRequest,
-        E: DeserializeOwned,
     {
         let request = jsonrpc::Request {
             jsonrpc: "2.0".to_string(),
@@ -91,21 +85,17 @@ impl<IO: StringIO> Client<IO> {
 
         self.request_id_counter += 1;
 
-        let jsonrpc_response: jsonrpc::Response<R::Result, E> =
+        let jsonrpc_response: jsonrpc::Response<R::Result, serde_json::Value> =
             serde_json::from_str(&response).context("deserializing response")?;
 
-        Ok(match jsonrpc_response.result {
+        match jsonrpc_response.result {
             jsonrpc::JsonRpcResult::Result(result) => Ok(result),
             jsonrpc::JsonRpcResult::Error {
                 code,
                 message,
-                data,
-            } => Err(Error {
-                code,
-                message,
-                data,
-            }),
-        })
+                data: _,
+            } => Err((Error::LSP { code, message }).into()),
+        }
     }
 
     pub fn notify<R>(&mut self, params: Option<R::Params>) -> Result<()>
