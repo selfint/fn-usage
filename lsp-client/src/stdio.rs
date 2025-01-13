@@ -3,6 +3,8 @@ use std::process::{Child, ChildStdin, ChildStdout};
 
 use anyhow::Context;
 
+use crate::client;
+
 pub struct StdIO {
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
@@ -16,7 +18,7 @@ impl StdIO {
     }
 }
 
-impl crate::client::StringIO for StdIO {
+impl client::StringIO for StdIO {
     fn send(&mut self, msg: &str) -> anyhow::Result<()> {
         self.stdin
             .write_all(msg.as_bytes())
