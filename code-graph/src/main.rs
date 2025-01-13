@@ -1,13 +1,15 @@
 use std::collections::HashSet;
+use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
 use std::str::FromStr;
 
 use anyhow::{Context, Result};
-
-use lsp_client::types::{notification::*, request::*, *};
-use lsp_client::StdIO;
+use lsp_client::types::notification::{DidOpenTextDocument, Initialized};
+use lsp_client::types::request::{DocumentSymbolRequest, Initialize, References};
+use lsp_client::types::{DocumentSymbolResponse, Url};
 use serde_json::json;
-use std::io::{BufRead, BufReader};
+
+use lsp_client::StdIO;
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -59,7 +61,7 @@ fn main() -> Result<()> {
         .map(|n| n.as_str())
         .collect();
 
-    let edges = get_edges(&mut client, &files)?;
+    let edges = get_edges(&mut client, &root_uri, &files)?;
 
     println!(
         "{}",
@@ -91,12 +93,13 @@ fn read_uri(uri: &Url) -> Result<String> {
 
 fn get_edges(
     client: &mut lsp_client::Client<StdIO>,
+    root_uri: &Url,
     files: &[Url],
 ) -> Result<HashSet<(String, String)>> {
     let mut edges: HashSet<(String, String)> = HashSet::new();
 
     for uri in files {
-        eprintln!("Processing uri: {}", uri.as_str());
+        eprintln!("Loading uri: {}", uri.as_str());
 
         client.notify::<DidOpenTextDocument>(serde_json::from_value(json!({
             "textDocument": {
@@ -106,6 +109,13 @@ fn get_edges(
             "text": read_uri(uri)?,
             }
         }))?)?;
+    }
+
+    eprintln!("Waiting 3 seconds for LSP to index code...");
+    std::thread::sleep(std::time::Duration::from_secs(3));
+
+    for uri in files {
+        eprintln!("Processing uri: {}", uri.as_str());
 
         let symbols = client.request::<DocumentSymbolRequest>(serde_json::from_value(json!({
             "textDocument": {
@@ -114,18 +124,32 @@ fn get_edges(
         }))?)?;
 
         let symbols = match symbols {
+            Some(DocumentSymbolResponse::Nested(vec)) => {
+                let mut symbols = vec![];
+                let mut queue = vec;
+
+                while let Some(symbol) = queue.pop() {
+                    symbols.push(symbol.clone());
+                    if let Some(children) = symbol.children {
+                        queue.extend(children);
+                    }
+                }
+
+                symbols
+            }
             Some(DocumentSymbolResponse::Flat(flat)) => {
                 if flat.len() > 0 {
                     panic!("Got non-empty flat documentSymbol response")
-                } else {
-                    vec![]
                 }
+
+                vec![]
             }
-            Some(DocumentSymbolResponse::Nested(vec)) => vec,
             None => vec![],
         };
 
         for symbol in symbols.iter() {
+            eprintln!("Processing symbol: {:?} {}", symbol.kind, symbol.name);
+
             let Some(references) =
                 client.request::<References>(serde_json::from_value(json!({
                     "textDocument": {
@@ -136,17 +160,25 @@ fn get_edges(
                         "character": symbol.selection_range.start.character,
                     },
                     "context": {
-                        "includeDeclaration": true,
+                        "includeDeclaration": false,
                     },
                 }))?)?
             else {
                 continue;
             };
 
+            eprintln!("Got references: {}", references.len());
+
             for reference in references {
-                if reference.uri != *uri {
-                    edges.insert((reference.uri.to_string(), uri.to_string()));
+                if reference.uri == *uri {
+                    continue;
                 }
+
+                if !reference.uri.as_str().starts_with(root_uri.as_str()) {
+                    continue;
+                }
+
+                edges.insert((reference.uri.to_string(), uri.to_string()));
             }
         }
     }
@@ -178,9 +210,6 @@ fn initialize_lsp(client: &mut lsp_client::Client<StdIO>, root_uri: &Url) -> Res
     }
 
     client.notify::<Initialized>(None)?;
-
-    eprintln!("Waiting 3 seconds for LSP to index code...");
-    std::thread::sleep(std::time::Duration::from_secs(3));
 
     Ok(())
 }
