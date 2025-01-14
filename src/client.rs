@@ -1,10 +1,6 @@
 use anyhow::Result;
-use lsp_types::{
-    notification::{DidOpenTextDocument, Initialized},
-    request::{DocumentSymbolRequest, Initialize, References},
-    DocumentSymbol, DocumentSymbolResponse, ServerCapabilities, Url,
-};
-use serde_json::json;
+use lsp_types::Url;
+use lsp_types::{notification::*, request::*, *};
 
 use crate::{StringIO, LSP};
 
@@ -21,33 +17,34 @@ impl<IO: StringIO> Client<IO> {
 
     pub fn open(&mut self, uri: &Url, text: &str) -> Result<()> {
         self.lsp
-            .notify::<DidOpenTextDocument>(serde_json::from_value(json!({
-                "textDocument": {
-                "uri": uri,
-                "languageId": "",
-                "version": 1,
-                "text": text,
-                }
-            }))?)?;
-
-        Ok(())
+            .notify::<DidOpenTextDocument>(Some(DidOpenTextDocumentParams {
+                text_document: TextDocumentItem {
+                    uri: uri.clone(),
+                    language_id: "".to_string(),
+                    version: 1,
+                    text: text.to_string(),
+                },
+            }))
     }
 
     pub fn get_references(&mut self, uri: &Url, symbol: &DocumentSymbol) -> Result<Vec<Url>> {
         let references = self
             .lsp
-            .request::<References>(serde_json::from_value(json!({
-                "textDocument": {
-                    "uri": uri.clone(),
+            .request::<References>(Some(lsp_types::ReferenceParams {
+                text_document_position: lsp_types::TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri: uri.clone() },
+                    position: symbol.selection_range.start,
                 },
-                "position": {
-                    "line": symbol.selection_range.start.line,
-                    "character": symbol.selection_range.start.character,
+                work_done_progress_params: WorkDoneProgressParams {
+                    work_done_token: None,
                 },
-                "context": {
-                    "includeDeclaration": false,
+                partial_result_params: PartialResultParams {
+                    partial_result_token: None,
                 },
-            }))?)?;
+                context: lsp_types::ReferenceContext {
+                    include_declaration: false,
+                },
+            }))?;
 
         Ok(references
             .unwrap_or_default()
@@ -59,11 +56,15 @@ impl<IO: StringIO> Client<IO> {
     pub fn get_symbols(&mut self, uri: &Url) -> Result<Vec<DocumentSymbol>> {
         let symbols = self
             .lsp
-            .request::<DocumentSymbolRequest>(serde_json::from_value(json!({
-                "textDocument": {
-                    "uri": uri,
+            .request::<DocumentSymbolRequest>(Some(DocumentSymbolParams {
+                text_document: TextDocumentIdentifier { uri: uri.clone() },
+                work_done_progress_params: WorkDoneProgressParams {
+                    work_done_token: None,
                 },
-            }))?)?;
+                partial_result_params: PartialResultParams {
+                    partial_result_token: None,
+                },
+            }))?;
 
         let symbols = match symbols {
             Some(DocumentSymbolResponse::Nested(vec)) => {
@@ -93,21 +94,23 @@ impl<IO: StringIO> Client<IO> {
     }
 
     pub fn initialize(&mut self, uri: &Url) -> Result<ServerCapabilities> {
-        let response = self
-            .lsp
-            .request::<Initialize>(serde_json::from_value(json!({
-                "capabilities": {
-                    "textDocument": {
-                        "documentSymbol": {
-                            "hierarchicalDocumentSymbolSupport": true,
-                        },
-                    }
-                },
-                "workspaceFolders": [{
-                    "uri": uri,
-                    "name": "name"
-                }]
-            }))?)?;
+        let response = self.lsp.request::<Initialize>(Some(InitializeParams {
+            capabilities: ClientCapabilities {
+                text_document: Some(TextDocumentClientCapabilities {
+                    document_symbol: Some(DocumentSymbolClientCapabilities {
+                        hierarchical_document_symbol_support: Some(true),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            workspace_folders: Some(vec![WorkspaceFolder {
+                uri: uri.clone(),
+                name: "name".to_string(),
+            }]),
+            ..Default::default()
+        }))?;
 
         self.lsp.notify::<Initialized>(None)?;
 
