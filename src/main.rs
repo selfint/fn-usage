@@ -4,9 +4,7 @@ use std::process::{Child, Command, Stdio};
 use std::str::FromStr;
 
 use anyhow::{Context, Result};
-use lsp_types::notification::{DidOpenTextDocument, Initialized};
-use lsp_types::request::{DocumentSymbolRequest, Initialize, References};
-use lsp_types::{DocumentSymbol, DocumentSymbolResponse, ServerCapabilities, Url};
+use lsp_types::Url;
 use serde_json::json;
 
 use lsp_client::{Client, StdIO};
@@ -33,7 +31,7 @@ fn main() -> Result<()> {
         .collect();
 
     let mut child = start_lsp_server(cmd, args);
-    let mut client = Client::new(StdIO::new(&mut child), false);
+    let mut client = lsp_client::Client::new(StdIO::new(&mut child));
 
     // start stderr logging thread
     let stderr = child.stderr.take().expect("Failed to take stderr");
@@ -47,7 +45,7 @@ fn main() -> Result<()> {
         }
     });
 
-    let server_capabilities = initialize_lsp(&mut client, &root)?;
+    let server_capabilities = client.initialize(&root)?;
 
     if server_capabilities.document_symbol_provider.is_none() {
         anyhow::bail!("Server is not 'textDocument/documentSymbol' provider");
@@ -103,7 +101,7 @@ fn get_edges(
             uri.as_str()
         );
 
-        open_uri(client, uri)?;
+        client.open(uri, &read_uri(uri)?)?;
     }
 
     eprintln!("Waiting 3 seconds for LSP to index code...");
@@ -122,7 +120,7 @@ fn get_edges(
             continue;
         };
 
-        let symbols = get_symbols(client, uri)?;
+        let symbols = client.get_symbols(uri)?;
 
         eprintln!(" | Got symbols: {}", symbols.len());
 
@@ -136,17 +134,13 @@ fn get_edges(
                 symbol.name
             );
 
-            let references = get_references(client, uri, symbol)?;
+            let references = client.get_references(uri, symbol)?;
 
             eprintln!(" | Got references: {}", references.len());
 
             for reference in references {
-                if reference == *uri {
-                    continue;
-                }
-
-                if let Some(reference_node) = reference.as_str().strip_prefix(root) {
-                    if uris.contains(&reference) {
+                if reference != *uri && uris.contains(&reference) {
+                    if let Some(reference_node) = reference.as_str().strip_prefix(root) {
                         edges.insert((reference_node.to_string(), symbol_node.to_string()));
                     }
                 }
@@ -155,96 +149,4 @@ fn get_edges(
     }
 
     Ok(edges)
-}
-
-fn open_uri(client: &mut Client<StdIO>, uri: &Url) -> Result<()> {
-    client.notify::<DidOpenTextDocument>(serde_json::from_value(json!({
-        "textDocument": {
-        "uri": uri,
-        "languageId": "",
-        "version": 1,
-        "text": read_uri(uri)?,
-        }
-    }))?)?;
-
-    Ok(())
-}
-
-fn get_references(
-    client: &mut Client<StdIO>,
-    uri: &Url,
-    symbol: &DocumentSymbol,
-) -> Result<Vec<Url>> {
-    let references = client.request::<References>(serde_json::from_value(json!({
-        "textDocument": {
-            "uri": uri.clone(),
-        },
-        "position": {
-            "line": symbol.selection_range.start.line,
-            "character": symbol.selection_range.start.character,
-        },
-        "context": {
-            "includeDeclaration": false,
-        },
-    }))?)?;
-
-    Ok(references
-        .unwrap_or_default()
-        .into_iter()
-        .map(|f| f.uri)
-        .collect())
-}
-
-fn get_symbols(client: &mut Client<StdIO>, uri: &Url) -> Result<Vec<DocumentSymbol>> {
-    let symbols = client.request::<DocumentSymbolRequest>(serde_json::from_value(json!({
-        "textDocument": {
-            "uri": uri,
-        },
-    }))?)?;
-
-    let symbols = match symbols {
-        Some(DocumentSymbolResponse::Nested(vec)) => {
-            let mut symbols = vec![];
-            let mut queue = vec;
-
-            while let Some(symbol) = queue.pop() {
-                symbols.push(symbol.clone());
-                if let Some(children) = symbol.children {
-                    queue.extend(children);
-                }
-            }
-
-            symbols
-        }
-        Some(DocumentSymbolResponse::Flat(flat)) => {
-            if flat.len() > 0 {
-                panic!("Got non-empty flat documentSymbol response")
-            }
-
-            vec![]
-        }
-        None => vec![],
-    };
-
-    Ok(symbols)
-}
-
-fn initialize_lsp(client: &mut Client<StdIO>, uri: &Url) -> Result<ServerCapabilities> {
-    let response = client.request::<Initialize>(serde_json::from_value(json!({
-        "capabilities": {
-            "textDocument": {
-                "documentSymbol": {
-                    "hierarchicalDocumentSymbolSupport": true,
-                },
-            }
-        },
-        "workspaceFolders": [{
-            "uri": uri,
-            "name": "name"
-        }]
-    }))?)?;
-
-    client.notify::<Initialized>(None)?;
-
-    Ok(response.capabilities)
 }

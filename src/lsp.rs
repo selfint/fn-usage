@@ -1,6 +1,10 @@
 use anyhow::Result;
-use lsp_types::{notification::Notification as LspNotification, request::Request as LspRequest};
-use serde_json::Value;
+use lsp_types::{
+    notification::{DidOpenTextDocument, Initialized, Notification as LspNotification},
+    request::{DocumentSymbolRequest, Initialize, References, Request as LspRequest},
+    DocumentSymbol, DocumentSymbolResponse, ServerCapabilities, Url,
+};
+use serde_json::{json, Value};
 
 use crate::jsonrpc;
 
@@ -31,12 +35,119 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 pub struct Client<IO: StringIO> {
+    transport: Transport<IO>,
+}
+
+impl<IO: StringIO> Client<IO> {
+    pub fn new(io: IO) -> Self {
+        Self {
+            transport: Transport::new(io, false),
+        }
+    }
+
+    pub fn open(&mut self, uri: &Url, text: &str) -> Result<()> {
+        self.transport
+            .notify::<DidOpenTextDocument>(serde_json::from_value(json!({
+                "textDocument": {
+                "uri": uri,
+                "languageId": "",
+                "version": 1,
+                "text": text,
+                }
+            }))?)?;
+
+        Ok(())
+    }
+
+    pub fn get_references(&mut self, uri: &Url, symbol: &DocumentSymbol) -> Result<Vec<Url>> {
+        let references = self
+            .transport
+            .request::<References>(serde_json::from_value(json!({
+                "textDocument": {
+                    "uri": uri.clone(),
+                },
+                "position": {
+                    "line": symbol.selection_range.start.line,
+                    "character": symbol.selection_range.start.character,
+                },
+                "context": {
+                    "includeDeclaration": false,
+                },
+            }))?)?;
+
+        Ok(references
+            .unwrap_or_default()
+            .into_iter()
+            .map(|f| f.uri)
+            .collect())
+    }
+
+    pub fn get_symbols(&mut self, uri: &Url) -> Result<Vec<DocumentSymbol>> {
+        let symbols = self
+            .transport
+            .request::<DocumentSymbolRequest>(serde_json::from_value(json!({
+                "textDocument": {
+                    "uri": uri,
+                },
+            }))?)?;
+
+        let symbols = match symbols {
+            Some(DocumentSymbolResponse::Nested(vec)) => {
+                let mut symbols = vec![];
+                let mut queue = vec;
+
+                while let Some(symbol) = queue.pop() {
+                    symbols.push(symbol.clone());
+                    if let Some(children) = symbol.children {
+                        queue.extend(children);
+                    }
+                }
+
+                symbols
+            }
+            Some(DocumentSymbolResponse::Flat(flat)) => {
+                if flat.len() > 0 {
+                    panic!("Got non-empty flat documentSymbol response")
+                }
+
+                vec![]
+            }
+            None => vec![],
+        };
+
+        Ok(symbols)
+    }
+
+    pub fn initialize(&mut self, uri: &Url) -> Result<ServerCapabilities> {
+        let response = self
+            .transport
+            .request::<Initialize>(serde_json::from_value(json!({
+                "capabilities": {
+                    "textDocument": {
+                        "documentSymbol": {
+                            "hierarchicalDocumentSymbolSupport": true,
+                        },
+                    }
+                },
+                "workspaceFolders": [{
+                    "uri": uri,
+                    "name": "name"
+                }]
+            }))?)?;
+
+        self.transport.notify::<Initialized>(None)?;
+
+        Ok(response.capabilities)
+    }
+}
+
+pub struct Transport<IO: StringIO> {
     io: IO,
     request_id_counter: i64,
     verbose: bool,
 }
 
-impl<IO: StringIO> Client<IO> {
+impl<IO: StringIO> Transport<IO> {
     pub fn new(io: IO, verbose: bool) -> Self {
         Self {
             io,

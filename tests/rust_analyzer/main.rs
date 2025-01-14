@@ -1,7 +1,7 @@
-use lsp_types::{
-    notification::Initialized, request::Initialize, InitializeParams, InitializedParams,
-};
 use std::process::{Child, Command, Stdio};
+use std::str::FromStr;
+
+use lsp_types::Url;
 
 fn start_rust_analyzer() -> Child {
     Command::new("rust-analyzer")
@@ -16,13 +16,9 @@ fn start_rust_analyzer() -> Child {
 fn test_rust_analyzer() {
     let mut child = start_rust_analyzer();
 
-    let mut client = lsp_client::Client::new(lsp_client::StdIO::new(&mut child), true);
+    let mut client = lsp_client::Client::new(lsp_client::StdIO::new(&mut child));
 
-    let init_resp = client.request::<Initialize>(Some(InitializeParams::default()));
+    let init_resp = client.initialize(&Url::from_str("file:///").unwrap());
 
     assert!(init_resp.is_ok());
-
-    assert!(client
-        .notify::<Initialized>(Some(InitializedParams {}))
-        .is_ok());
 }
