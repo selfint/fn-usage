@@ -126,7 +126,7 @@ fn get_edges(
 
         for (j, symbol) in symbols.iter().enumerate() {
             eprint!(
-                "Requesting {} symbol ({:>4}/{:>4}): {:?} {:.25}",
+                "Requesting {} symbol ({:>4}/{:>4}): {:?} {:>25}",
                 symbol_node,
                 j + 1,
                 symbols.len(),
