@@ -58,14 +58,15 @@ fn main() -> Result<()> {
         .iter()
         .collect::<HashSet<_>>()
         .iter()
-        .map(|n| n.as_str())
+        .map(|n| n.as_str().strip_prefix(root_uri.as_str()))
         .collect();
 
-    let edges = get_edges(&mut client, &root_uri, &files)?;
+    let edges = get_edges(&mut client, root_uri.as_str(), &files)?;
 
     println!(
         "{}",
         json!({
+            "root": root_uri,
             "nodes": nodes,
             "edges": edges
         })
@@ -93,7 +94,7 @@ fn read_uri(uri: &Url) -> Result<String> {
 
 fn get_edges(
     client: &mut lsp_client::Client<StdIO>,
-    root_uri: &Url,
+    root_uri: &str,
     files: &[Url],
 ) -> Result<HashSet<(String, String)>> {
     let mut edges: HashSet<(String, String)> = HashSet::new();
@@ -174,11 +175,19 @@ fn get_edges(
                     continue;
                 }
 
-                if !reference.uri.as_str().starts_with(root_uri.as_str()) {
+                if !reference.uri.as_str().starts_with(root_uri) {
                     continue;
                 }
 
-                edges.insert((reference.uri.to_string(), uri.to_string()));
+                edges.insert((
+                    reference
+                        .uri
+                        .as_str()
+                        .strip_prefix(root_uri)
+                        .unwrap()
+                        .to_string(),
+                    uri.as_str().strip_prefix(root_uri).unwrap().to_string(),
+                ));
             }
         }
     }
