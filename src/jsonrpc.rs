@@ -66,12 +66,15 @@ mod tests {
             @r###"{"jsonrpc": "2.0", "method": "method", "params": null, "id": 1}"###
         );
 
-        insta::assert_compact_json_snapshot!(Request::<Option<()>> {
-            jsonrpc: "2.0".to_string(),
-            method: "method".to_string(),
-            params: None,
-            id: 1,
-        },);
+        insta::assert_compact_json_snapshot!(
+            Request::<Option<()>> {
+                jsonrpc: "2.0".to_string(),
+                method: "method".to_string(),
+                params: None,
+                id: 1,
+            },
+            @r#"{"jsonrpc": "2.0", "method": "method", "id": 1}"#
+        );
     }
 
     #[test]

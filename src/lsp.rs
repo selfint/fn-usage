@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use lsp_types::{notification::Notification as LspNotification, request::Request as LspRequest};
 use serde_json::Value;
 
@@ -20,7 +20,7 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Error {} - {}: {}",
+            "Error {} {}: {}",
             self.code,
             self.message,
             self.data.as_ref().unwrap_or(&serde_json::json!(null))
@@ -49,36 +49,31 @@ impl<IO: StringIO> Client<IO> {
     where
         R: LspRequest,
     {
-        let request = jsonrpc::Request {
+        let msg = serde_json::to_string(&jsonrpc::Request {
             jsonrpc: "2.0".to_string(),
             method: R::METHOD.to_string(),
             params,
             id: self.request_id_counter,
-        };
+        })?;
 
-        let msg = serde_json::to_string(&request).context("serializing request")?;
-
-        self.io
-            .send(&format!(
-                "Content-Length: {}\r\n\r\n{}",
-                msg.as_bytes().len(),
-                msg
-            ))
-            .context("sending request")?;
+        self.io.send(&format!(
+            "Content-Length: {}\r\n\r\n{}",
+            msg.as_bytes().len(),
+            msg
+        ))?;
 
         if self.verbose {
             eprintln!("\t\tSent: {}", msg);
         }
 
         let response = loop {
-            let response = self.io.recv().context("receiving response")?;
+            let response = self.io.recv()?;
 
             if self.verbose {
                 eprintln!("\t\tReceived: {}", response);
             }
 
-            let json_value: Value = serde_json::from_str(&response)
-                .context(format!("deserializing response: {}", &response))?;
+            let json_value: Value = serde_json::from_str(&response)?;
 
             // check if this is our response
             if let Some(id) = json_value.get("id").and_then(Value::as_i64) {
@@ -95,9 +90,8 @@ impl<IO: StringIO> Client<IO> {
 
         self.request_id_counter += 1;
 
-        let jsonrpc_response: jsonrpc::Response<R::Result, serde_json::Value> =
-            serde_json::from_str(&response)
-                .context(format!("deserializing response: {}", &response))?;
+        let jsonrpc_response: jsonrpc::Response<_, serde_json::Value> =
+            serde_json::from_str(&response)?;
 
         match jsonrpc_response.result {
             jsonrpc::JsonRpcResult::Result(result) => Ok(result),
@@ -118,21 +112,17 @@ impl<IO: StringIO> Client<IO> {
     where
         R: LspNotification,
     {
-        let notification = jsonrpc::Notification {
+        let msg = serde_json::to_string(&jsonrpc::Notification {
             jsonrpc: "2.0".to_string(),
             method: R::METHOD.to_string(),
             params,
-        };
+        })?;
 
-        let msg = serde_json::to_string(&notification).context("serializing notification")?;
-
-        self.io
-            .send(&format!(
-                "Content-Length: {}\r\n\r\n{}",
-                msg.as_bytes().len(),
-                msg
-            ))
-            .context("sending notification")?;
+        self.io.send(&format!(
+            "Content-Length: {}\r\n\r\n{}",
+            msg.as_bytes().len(),
+            msg
+        ))?;
 
         if self.verbose {
             eprintln!("\t\tSent: {}", msg);

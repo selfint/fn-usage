@@ -1,21 +1,21 @@
 import sys
 import json
 from collections import defaultdict
-import hashlib
 
-
-def find_common_prefix(paths):
-    split_paths = [path.split("/") for path in paths]
-    min_len = min(len(p) for p in split_paths)
-
-    prefix = []
-    for i in range(min_len):
-        current = split_paths[0][i]
-        if all(p[i] == current for p in split_paths):
-            prefix.append(current)
-        else:
-            break
-    return "/".join(prefix)
+pastels_hex_color_theme = [
+    "#FFDAB9",  # Peach Puff      (approx. hue ~28°)
+    # "#FFDEAD",  # Navajo White    (approx. hue ~36°)
+    # "#F5DEB3",  # Wheat           (approx. hue ~39°)
+    # "#FFFACD",  # Lemon Chiffon   (approx. hue ~54°)
+    # "#F0E68C",  # Khaki           (approx. hue ~54°)
+    "#FAFAD2",  # Light Goldenrod (approx. hue ~60°)
+    "#D3FFCE",  # Light Green     (approx. hue ~110°)
+    # "#E0FFFF",  # Light Cyan      (approx. hue ~180°)
+    "#E6E6FA",  # Lavender        (approx. hue ~240°)
+    # "#D8BFD8",  # Thistle         (approx. hue ~300°)
+    # "#FFC0CB",  # Pink            (approx. hue ~350°)
+    # "#FFB6C1",  # Light Pink      (approx. hue ~351°)
+]
 
 
 def build_clusters(nodes):
@@ -31,28 +31,16 @@ def get_cluster(node):
     return "/".join(node.split("/")[:-1]) if "/" in node else ""
 
 
-def generate_color(name):
+def generate_color(index: int):
     """Generate a pastel color based on the cluster name."""
-    hash_object = hashlib.md5(name.encode())
-    hex_color = hash_object.hexdigest()[:6]
+    # Convert the name to a consistent hash value
 
-    # Soften the color by blending it with white
-    r = int(hex_color[0:2], 16)
-    g = int(hex_color[2:4], 16)
-    b = int(hex_color[4:6], 16)
-
-    # Blend with white for a pastel effect
-    r = int((r + 255) / 2)
-    g = int((g + 255) / 2)
-    b = int((b + 255) / 2)
-
-    return f"#{r:02x}{g:02x}{b:02x}"
+    return pastels_hex_color_theme[index]
 
 
 def generate_dot(data):
     nodes = data["nodes"]
     clusters = build_clusters(nodes)
-    root_cluster = find_common_prefix(nodes)
 
     dot = [
         "digraph G {",
@@ -61,20 +49,28 @@ def generate_dot(data):
         '    node [style=filled, fillcolor="#ffffff", shape=box];',
     ]
 
-    def create_subgraphs(cluster_path, indent=1):
+    def create_subgraphs(cluster_path, parents=None):
+        parents = parents or []
+        indent = len(parents) + 1
+
         sub_indent = "    " * indent
+        cluster_nodes = clusters.get(cluster_path, [])
+
         if cluster_path:
-            cluster_name = cluster_path.replace("/", "_")
-            color = generate_color(cluster_path)  # Generate color for the cluster
-            dot.append(f'{sub_indent}subgraph "cluster_{cluster_name}" {{')
-            dot.append(f'{sub_indent}    label="{cluster_path}";')
+            cluster_label = cluster_path[0 if not parents else len(parents[-1]) :]
+            print(cluster_path, cluster_nodes, file=sys.stderr)
+            color = pastels_hex_color_theme[(indent - 1) % len(pastels_hex_color_theme)]
+            dot.append(f'{sub_indent}subgraph "cluster_{cluster_path}" {{')
+            dot.append(f'{sub_indent}    label="{cluster_label}";')
+            dot.append(f"{sub_indent}    fontsize=20;")
             dot.append(f"{sub_indent}    style=filled;")
             dot.append(f'{sub_indent}    color="{color}";')
             dot.append(f'{sub_indent}    fillcolor="{color}";')
 
         # Add nodes
-        for node in clusters.get(cluster_path, []):
-            dot.append(f'{sub_indent}    "{node}";')
+        for node in cluster_nodes:
+            label = node.split("/")[-1]
+            dot.append(f'{sub_indent}    "{node}" [label="{label}"];')
 
         # Nested clusters
         nested_clusters = {
@@ -83,7 +79,7 @@ def generate_dot(data):
             if k.startswith(cluster_path + "/") and k != cluster_path
         }
         for nested in sorted(nested_clusters):
-            create_subgraphs(nested, indent + 1)
+            create_subgraphs(nested, parents + [cluster_path + "/"])
 
         if cluster_path:
             dot.append(f"{sub_indent}}}")
@@ -102,9 +98,9 @@ def generate_dot(data):
         edge_attrs = []
         if from_cluster != to_cluster:
             if to_cluster:
-                edge_attrs.append(f'lhead="cluster_{to_cluster.replace("/", "_")}"')
+                edge_attrs.append(f'lhead="cluster_{to_cluster}"')
             if from_cluster:
-                edge_attrs.append(f'ltail="cluster_{from_cluster.replace("/", "_")}"')
+                edge_attrs.append(f'ltail="cluster_{from_cluster}"')
 
         edge_key = ", ".join(edge_attrs)
 

@@ -1,6 +1,0 @@
----
-source: lsp-client/src/jsonrpc.rs
-expression: "Request::<Option<()>>\n{\n    jsonrpc: \"2.0\".to_string(), method: \"method\".to_string(), params: None,\n    id: 1,\n}"
-snapshot_kind: text
----
-{"jsonrpc": "2.0", "method": "method", "id": 1}
