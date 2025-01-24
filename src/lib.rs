@@ -1,8 +1,6 @@
-mod client;
 mod jsonrpc;
 mod lsp;
 mod stdio;
 
-pub use client::Client;
-pub use lsp::{Error, StringIO, LSP};
+pub use lsp::{Client, Error, StringIO};
 pub use stdio::StdIO;

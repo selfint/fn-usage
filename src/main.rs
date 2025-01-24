@@ -4,13 +4,15 @@ use std::process::{Child, Command, Stdio};
 use std::str::FromStr;
 
 use anyhow::{Context, Result};
+use lsp_types::notification::Initialized;
+use lsp_types::request::Initialize;
 use lsp_types::Url;
 use serde_json::json;
 
 use lsp_client::{Client, StdIO};
 
 fn main() -> Result<()> {
-    let args: Vec<String> = std::env::args().collect();
+    let args: Vec<_> = std::env::args().collect();
 
     if args.len() < 3 {
         eprintln!("Usage: {} <root-uri> <lsp-cmd> [lsp-cmd-args...]", args[0]);
@@ -31,7 +33,7 @@ fn main() -> Result<()> {
         .collect();
 
     let mut child = start_lsp_server(cmd, args);
-    let mut client = lsp_client::Client::new(StdIO::new(&mut child));
+    let mut client = Client::new(StdIO::new(&mut child)?);
 
     // start stderr logging thread
     let stderr = child.stderr.take().expect("Failed to take stderr");
@@ -45,26 +47,39 @@ fn main() -> Result<()> {
         }
     });
 
-    let server_capabilities = client.initialize(&root)?;
+    let response = client.request::<Initialize>(
+        serde_json::from_value(json!({
+            "capabilities": {
+                "textDocument": {
+                    "documentSymbol": {
+                        "hierarchical_document_symbol_support": true
+                    }
+                }
+            }
+        }))
+        .unwrap(),
+    )?;
 
-    if server_capabilities.document_symbol_provider.is_none() {
+    if response.capabilities.document_symbol_provider.is_none() {
         anyhow::bail!("Server is not 'textDocument/documentSymbol' provider");
     }
 
-    if server_capabilities.references_provider.is_none() {
+    if response.capabilities.references_provider.is_none() {
         anyhow::bail!("Server is not 'textDocument/reference' provider");
     }
 
-    let edges = get_edges(&mut client, root.as_str(), &uris)?;
+    client.notify::<Initialized>(None)?;
 
-    println!(
-        "{}",
-        json!({
-            "root": root,
-            "nodes": uris,
-            "edges": edges
-        })
-    );
+    // let edges = get_edges(&mut client, root.as_str(), &uris)?;
+
+    // println!(
+    //     "{}",
+    //     json!({
+    //         "root": root,
+    //         "nodes": uris,
+    //         "edges": edges
+    //     })
+    // );
 
     Ok(())
 }
@@ -86,67 +101,63 @@ fn read_uri(uri: &Url) -> Result<String> {
     }
 }
 
-fn get_edges(
-    client: &mut Client<StdIO>,
-    root: &str,
-    uris: &[Url],
-) -> Result<HashSet<(String, String)>> {
-    let mut edges: HashSet<(String, String)> = HashSet::new();
+// fn get_edges(
+//     client: &mut Client<StdIO>,
+//     root: &str,
+//     uris: &[Url],
+// ) -> Result<HashSet<(String, String)>> {
+//     let mut edges: HashSet<(String, String)> = HashSet::new();
 
-    for (i, uri) in uris.iter().enumerate() {
-        eprintln!(
-            "Loading uri ({:>4}/{:>4}): {}",
-            i + 1,
-            uris.len(),
-            uri.as_str()
-        );
+//     for (i, uri) in uris.iter().enumerate() {
+//         eprintln!(
+//             "Loading uri ({:>4}/{:>4}): {}",
+//             i + 1,
+//             uris.len(),
+//             uri.as_str()
+//         );
 
-        client.open(uri, &read_uri(uri)?)?;
-    }
+//         client.open(uri, &read_uri(uri)?)?;
+//     }
 
-    eprintln!("Waiting 3 seconds for LSP to index code...");
-    std::thread::sleep(std::time::Duration::from_secs(3));
+//     eprintln!("Waiting 3 seconds for LSP to index code...");
+//     std::thread::sleep(std::time::Duration::from_secs(3));
 
-    for (i, uri) in uris.iter().enumerate() {
-        eprint!(
-            "Scanning uri ({:>4}/{:>4}): {}",
-            i + 1,
-            uris.len(),
-            uri.as_str()
-        );
+//     for (i, uri) in uris.iter().enumerate() {
+//         eprint!(
+//             "Scanning uri ({:>4}/{:>4}): {}",
+//             i + 1,
+//             uris.len(),
+//             uri.as_str()
+//         );
 
-        // ignore uri not under root
-        let Some(symbol_node) = uri.as_str().strip_prefix(root) else {
-            continue;
-        };
+//         // ignore uri not under root
+//         let Some(symbol_node) = uri.as_str().strip_prefix(root) else {
+//             continue;
+//         };
 
-        let symbols = client.get_symbols(uri)?;
+//         let symbols = client.get_symbols(uri)?;
 
-        eprintln!(" | Got symbols: {}", symbols.len());
+//         eprintln!(" | Got symbols: {}", symbols.len());
 
-        for (j, symbol) in symbols.iter().enumerate() {
-            eprint!(
-                "Requesting {} symbol ({:>4}/{:>4}): {:?} {:>25}",
-                symbol_node,
-                j + 1,
-                symbols.len(),
-                symbol.kind,
-                symbol.name
-            );
+//         for (j, symbol) in symbols.iter().enumerate() {
+//             eprint!(
+//                 "Requesting {} symbol ({:>4}/{:>4}): {:?} {:>25}",
+//                 symbol_node,
+//                 j + 1,
+//                 symbols.len(),
+//                 symbol.kind,
+//                 symbol.name
+//             );
 
-            let references = client.get_references(uri, symbol)?;
+//             for reference in client.get_references(uri, symbol)? {
+//                 if reference != *uri && uris.contains(&reference) {
+//                     if let Some(reference_node) = reference.as_str().strip_prefix(root) {
+//                         edges.insert((reference_node.to_string(), symbol_node.to_string()));
+//                     }
+//                 }
+//             }
+//         }
+//     }
 
-            eprintln!(" | Got references: {}", references.len());
-
-            for reference in references {
-                if reference != *uri && uris.contains(&reference) {
-                    if let Some(reference_node) = reference.as_str().strip_prefix(root) {
-                        edges.insert((reference_node.to_string(), symbol_node.to_string()));
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(edges)
-}
+//     Ok(edges)
+// }

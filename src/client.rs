@@ -10,9 +10,7 @@ pub struct Client<IO: StringIO> {
 
 impl<IO: StringIO> Client<IO> {
     pub fn new(io: IO) -> Self {
-        Self {
-            lsp: LSP::new(io, false),
-        }
+        Self { lsp: LSP::new(io) }
     }
 
     pub fn open(&mut self, uri: &Url, text: &str) -> Result<()> {
@@ -46,11 +44,13 @@ impl<IO: StringIO> Client<IO> {
                 },
             }))?;
 
-        Ok(references
+        let references = references
             .unwrap_or_default()
             .into_iter()
             .map(|f| f.uri)
-            .collect())
+            .collect();
+
+        Ok(references)
     }
 
     pub fn get_symbols(&mut self, uri: &Url) -> Result<Vec<DocumentSymbol>> {

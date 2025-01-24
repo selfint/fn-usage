@@ -13,7 +13,7 @@ pub trait StringIO {
 pub struct Error {
     pub code: i64,
     pub message: String,
-    pub data: Option<serde_json::Value>,
+    pub data: Option<Value>,
 }
 
 impl std::fmt::Display for Error {
@@ -30,18 +30,16 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-pub struct LSP<IO: StringIO> {
+pub struct Client<IO: StringIO> {
     io: IO,
     request_id_counter: i64,
-    verbose: bool,
 }
 
-impl<IO: StringIO> LSP<IO> {
-    pub fn new(io: IO, verbose: bool) -> Self {
+impl<IO: StringIO> Client<IO> {
+    pub fn new(io: IO) -> Self {
         Self {
             io,
             request_id_counter: 0,
-            verbose,
         }
     }
 
@@ -59,16 +57,8 @@ impl<IO: StringIO> LSP<IO> {
             msg
         ))?;
 
-        if self.verbose {
-            eprintln!("\t\tSent: {}", msg);
-        }
-
         let response = loop {
             let response = self.io.recv()?;
-
-            if self.verbose {
-                eprintln!("\t\tReceived: {}", response);
-            }
 
             let json_value: Value = serde_json::from_str(&response)?;
 
@@ -87,8 +77,7 @@ impl<IO: StringIO> LSP<IO> {
 
         self.request_id_counter += 1;
 
-        let jsonrpc_response: jsonrpc::Response<_, serde_json::Value> =
-            serde_json::from_str(&response)?;
+        let jsonrpc_response: jsonrpc::Response<_, Value> = serde_json::from_str(&response)?;
 
         match jsonrpc_response.result {
             jsonrpc::JsonRpcResult::Result(result) => Ok(result),
@@ -118,10 +107,204 @@ impl<IO: StringIO> LSP<IO> {
             msg
         ))?;
 
-        if self.verbose {
-            eprintln!("\t\tSent: {}", msg);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::VecDeque;
+
+    use anyhow::{anyhow, Result};
+    use lsp_types::{
+        notification::DidOpenTextDocument,
+        request::{Initialize, References},
+        InitializeError, InitializeResult, Location,
+    };
+    use serde::Serialize;
+    use serde_json::json;
+
+    use crate::{jsonrpc, lsp};
+
+    use super::Client;
+
+    #[derive(Debug, Serialize)]
+    struct TestIO<'a> {
+        sent: &'a mut Vec<String>,
+        received: VecDeque<String>,
+    }
+
+    impl<'a> TestIO<'a> {
+        fn new(sent: &'a mut Vec<String>, received: impl Into<VecDeque<String>>) -> Self {
+            Self {
+                sent,
+                received: received.into(),
+            }
+        }
+    }
+
+    impl<'a> lsp::StringIO for TestIO<'a> {
+        fn send(&mut self, msg: &str) -> Result<()> {
+            self.sent.push(msg.to_string());
+
+            Ok(())
         }
 
-        Ok(())
+        fn recv(&mut self) -> Result<String> {
+            self.received
+                .pop_front()
+                .ok_or(anyhow!("End of received queue"))
+        }
+    }
+
+    #[test]
+    fn test_initialize_request() {
+        let mut sent = vec![];
+        let mut client = Client::new(TestIO::new(
+            &mut sent,
+            [serde_json::to_string(&jsonrpc::Response {
+                jsonrpc: "2.0".to_string(),
+                result: jsonrpc::JsonRpcResult::<InitializeResult, InitializeError>::Result(
+                    InitializeResult::default(),
+                ),
+                id: Some(0),
+            })
+            .unwrap()],
+        ));
+
+        let response = client.request::<Initialize>(
+            serde_json::from_value(json!({
+                "capabilities": {
+                    "textDocument": {
+                        "documentSymbol": {
+                            "hierarchical_document_symbol_support": true
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+        );
+
+        assert!(response.is_ok());
+        assert!(sent.len() == 1);
+        insta::assert_snapshot!(
+            sent[0],
+            @r#"
+        Content-Length: 143
+
+        {"jsonrpc":"2.0","method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{"textDocument":{"documentSymbol":{}}}},"id":0}
+        "#
+        );
+    }
+
+    #[test]
+    fn test_open() {
+        let mut sent = vec![];
+        let mut client = Client::new(TestIO::new(&mut sent, []));
+
+        let response = client.notify::<DidOpenTextDocument>(
+            serde_json::from_value(json!({
+                "textDocument": {
+                    "uri": "file:///",
+                    "languageId": "",
+                    "version": 1,
+                    "text": ""
+                }
+            }))
+            .unwrap(),
+        );
+
+        assert!(response.is_ok());
+        assert!(sent.len() == 1);
+        insta::assert_snapshot!(
+            sent[0],
+            @r#"
+        Content-Length: 132
+
+        {"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///","languageId":"","version":1,"text":""}}}
+        "#
+        );
+    }
+
+    #[test]
+    fn test_get_references() {
+        let mut sent = vec![];
+        let mut client = Client::new(TestIO::new(
+            &mut sent,
+            [serde_json::to_string(&jsonrpc::Response {
+                jsonrpc: "2.0".to_string(),
+                result: jsonrpc::JsonRpcResult::<Option<Vec<Location>>, ()>::Result(Some(vec![])),
+                id: Some(0),
+            })
+            .unwrap()],
+        ));
+
+        let response = client.request::<References>(
+            serde_json::from_value(json!({
+                "textDocument": {
+                    "uri": "file:///",
+                },
+                "position": {
+                    "line": 0,
+                    "character": 0
+                },
+                "context": {
+                    "includeDeclaration": false
+                }
+            }))
+            .unwrap(),
+        );
+
+        assert!(response.is_ok());
+        assert!(sent.len() == 1);
+        insta::assert_snapshot!(
+            sent[0],
+            @r#"
+        Content-Length: 179
+
+        {"jsonrpc":"2.0","method":"textDocument/references","params":{"textDocument":{"uri":"file:///"},"position":{"line":0,"character":0},"context":{"includeDeclaration":false}},"id":0}
+        "#
+        );
+    }
+
+    #[test]
+    fn test_get_symbols() {
+        let mut sent = vec![];
+        let mut client = Client::new(TestIO::new(
+            &mut sent,
+            [serde_json::to_string(&jsonrpc::Response {
+                jsonrpc: "2.0".to_string(),
+                result: jsonrpc::JsonRpcResult::<Option<Vec<Location>>, ()>::Result(Some(vec![])),
+                id: Some(0),
+            })
+            .unwrap()],
+        ));
+
+        let response = client.request::<References>(
+            serde_json::from_value(json!({
+                "textDocument": {
+                    "uri": "file:///",
+                },
+                "position": {
+                    "line": 0,
+                    "character": 0
+                },
+                "context": {
+                    "includeDeclaration": false
+                }
+            }))
+            .unwrap(),
+        );
+
+        assert!(response.is_ok());
+        assert!(sent.len() == 1);
+        insta::assert_snapshot!(
+            sent[0],
+            @r#"
+        Content-Length: 179
+
+        {"jsonrpc":"2.0","method":"textDocument/references","params":{"textDocument":{"uri":"file:///"},"position":{"line":0,"character":0},"context":{"includeDeclaration":false}},"id":0}
+        "#
+        );
     }
 }

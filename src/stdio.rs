@@ -1,7 +1,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout};
 
-use anyhow::Context;
+use anyhow::{Context, Result};
 
 use crate::lsp;
 
@@ -11,21 +11,22 @@ pub struct StdIO {
 }
 
 impl StdIO {
-    pub fn new(child: &mut Child) -> Self {
-        let stdin = child.stdin.take().expect("child has no stdin");
-        let stdout = BufReader::new(child.stdout.take().expect("child has no stdout"));
-        Self { stdin, stdout }
+    pub fn new(child: &mut Child) -> Result<Self> {
+        let stdin = child.stdin.take().context("child has no stdin")?;
+        let stdout = BufReader::new(child.stdout.take().context("child has no stdout")?);
+
+        Ok(Self { stdin, stdout })
     }
 }
 
 impl lsp::StringIO for StdIO {
-    fn send(&mut self, msg: &str) -> anyhow::Result<()> {
+    fn send(&mut self, msg: &str) -> Result<()> {
         self.stdin
             .write_all(msg.as_bytes())
             .context("writing msg to stdin")
     }
 
-    fn recv(&mut self) -> anyhow::Result<String> {
+    fn recv(&mut self) -> Result<String> {
         let mut content_length = None;
         let mut content_type = None;
 
