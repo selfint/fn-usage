@@ -105,6 +105,8 @@ fn main() -> Result<()> {
             for reference in client.get_references(uri.clone(), symbol)? {
                 if reference != *uri && uris.contains(&reference) {
                     if let Some(reference_node) = reference.as_str().strip_prefix(root.as_str()) {
+                        eprintln!("Found reference: {} -> {}", reference_node, symbol_node);
+
                         edges.insert((reference_node.to_string(), symbol_node.to_string()));
                     }
                 }
