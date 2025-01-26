@@ -1,9 +1,9 @@
 use anyhow::Result;
-use lsp_types::Url;
 use lsp_types::{
     notification::{DidOpenTextDocument, Initialized},
-    request::{DocumentSymbolRequest, Initialize, References},
-    DocumentSymbol, DocumentSymbolResponse, ServerCapabilities,
+    request::{DocumentSymbolRequest, GotoDefinition, Initialize, References},
+    DocumentSymbol, DocumentSymbolResponse, GotoDefinitionResponse, ServerCapabilities, SymbolKind,
+    Url,
 };
 use serde_json::json;
 
@@ -24,7 +24,7 @@ impl<IO: StringIO> Client<IO> {
         )
     }
 
-    pub fn get_references(&mut self, uri: Url, symbol: &DocumentSymbol) -> Result<Vec<Url>> {
+    pub fn references(&mut self, uri: Url, symbol: &DocumentSymbol) -> Result<Vec<Url>> {
         let references = self.request::<References>(
             serde_json::from_value(json!({
                 "textDocument": {
@@ -38,16 +38,40 @@ impl<IO: StringIO> Client<IO> {
             .unwrap(),
         )?;
 
-        let references = references
+        Ok(references
             .unwrap_or_default()
             .into_iter()
-            .map(|f| f.uri)
-            .collect();
-
-        Ok(references)
+            .map(|r| r.uri)
+            .collect())
     }
 
-    pub fn get_symbols(&mut self, uri: Url) -> Result<Vec<DocumentSymbol>> {
+    pub fn goto_definition(&mut self, uri: Url, symbol: &DocumentSymbol) -> Result<Vec<Url>> {
+        let definition = self.request::<GotoDefinition>(
+            serde_json::from_value(json!({
+            "textDocument": {
+                "uri": uri,
+            },
+            "position": symbol.selection_range.start,
+            }))
+            .unwrap(),
+        )?;
+
+        let definition = if let Some(definition) = definition {
+            match definition {
+                GotoDefinitionResponse::Scalar(location) => vec![location.uri],
+                GotoDefinitionResponse::Array(vec) => vec.into_iter().map(|l| l.uri).collect(),
+                GotoDefinitionResponse::Link(vec) => {
+                    vec.into_iter().map(|l| l.target_uri).collect()
+                }
+            }
+        } else {
+            vec![]
+        };
+
+        Ok(definition)
+    }
+
+    pub fn symbols(&mut self, uri: Url, mask: &[SymbolKind]) -> Result<Vec<DocumentSymbol>> {
         let symbols = self.request::<DocumentSymbolRequest>(
             serde_json::from_value(json!({
                 "textDocument": {
@@ -70,7 +94,14 @@ impl<IO: StringIO> Client<IO> {
                     }
                 }
 
-                symbols
+                if mask.len() == 0 {
+                    symbols
+                } else {
+                    symbols
+                        .into_iter()
+                        .filter(|s| mask.contains(&s.kind))
+                        .collect()
+                }
             }
             Some(DocumentSymbolResponse::Flat(flat)) => {
                 if flat.len() > 0 {

@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 use std::str::FromStr;
 
 use anyhow::Result;
-use lsp_types::Url;
+use lsp_types::{SymbolKind, Url};
 use serde_json::json;
 
 use lsp_client::{Client, StdIO};
@@ -91,7 +91,10 @@ fn main() -> Result<()> {
             continue;
         };
 
-        let symbols = client.get_symbols(uri.clone())?;
+        let symbols = client.symbols(
+            uri.clone(),
+            &[SymbolKind::FUNCTION, SymbolKind::CLASS, SymbolKind::METHOD],
+        )?;
 
         for (j, symbol) in symbols.iter().enumerate() {
             eprintln!(
@@ -102,23 +105,41 @@ fn main() -> Result<()> {
                 symbol.name,
             );
 
-            for reference in client.get_references(uri.clone(), symbol)? {
-                if reference != *uri && uris.contains(&reference) {
-                    if let Some(reference_node) = reference.as_str().strip_prefix(root.as_str()) {
-                        eprintln!("Found reference: {} -> {}", reference_node, symbol_node);
+            let definitions = client.goto_definition(uri.clone(), symbol)?;
+            if !definitions
+                .iter()
+                .any(|d| d.as_str().starts_with(root.as_str()))
+            {
+                eprintln!(
+                    "Ignoring symbol outside of root, defined at: {:?}",
+                    definitions.iter().map(|d| d.as_str()).collect::<Vec<_>>()
+                );
 
-                        edges.insert((reference_node.to_string(), symbol_node.to_string()));
-                    }
+                continue;
+            }
+
+            for reference in client.references(uri.clone(), symbol)? {
+                // ignore symbols defined outside of project root
+                if reference != *uri && uris.contains(&reference) {
+                    let reference_node = reference.as_str().strip_prefix(root.as_str()).unwrap();
+                    eprintln!("Found reference: {} -> {}", reference_node, symbol_node);
+
+                    edges.insert((reference_node.to_string(), symbol_node.to_string()));
                 }
             }
         }
     }
 
+    let nodes: Vec<_> = uris
+        .iter()
+        .filter_map(|u| u.as_str().strip_prefix(root.as_str()))
+        .collect();
+
     println!(
         "{}",
         json!({
             "root": root,
-            "nodes": uris,
+            "nodes": nodes,
             "edges": edges
         })
     );
