@@ -132,17 +132,17 @@ JSON-RPC has 3 message types:
 - `Notication` - is a `Request` without an `id`, and thus has no `Response`.
 - `Response` - can either contain a `result`, or an `error` value.
 
-Example `Request` and `Response` (`<--` is to **client**, `-->` is to **server**):
+Example `Request` and `Response`:
 
 ```json
---> {"jsonrpc": "2.0", "method": "sub", "params": [4, 2], "id": 1}
-<-- {"jsonrpc": "2.0", "result": 2, "id": 1}
+{"jsonrpc": "2.0", "method": "sub", "params": [4, 2], "id": 1}
+{"jsonrpc": "2.0", "result": 2, "id": 1}
 ```
 
 Example `Notification`:
 
 ```json
---> {"jsonrpc": "2.0", "method": "notify", "params": {"status": "ok"}}
+{ "jsonrpc": "2.0", "method": "notify", "params": { "status": "ok" } }
 ```
 
 Notice that there is no `Response` for `Notification`, and that `params` can
@@ -151,8 +151,8 @@ either be a JSON `list` or `object` type.
 Example `Response` with `error`:
 
 ```json
---> {"jsonrpc": "2.0", "method": "foobar", "id": "1"}
-<-- {"jsonrpc": "2.0", "error": {"code": -32601, "message": "Method not found"}, "id": "1"}
+{"jsonrpc": "2.0", "method": "foobar", "id": "1"}
+{"jsonrpc": "2.0", "error": {"code": -32601, "message": "Method not found"}, "id": "1"}
 ```
 
 ### Code
