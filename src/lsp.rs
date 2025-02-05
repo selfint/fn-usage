@@ -23,18 +23,12 @@ impl<IO: StringIO> Client<IO> {
     }
 
     pub fn request<R: Request>(&mut self, params: Option<R::Params>) -> Result<R::Result> {
-        let msg = serde_json::to_string(&jsonrpc::Request {
+        self.io.send(&serde_json::to_string(&jsonrpc::Request {
             jsonrpc: "2.0".to_string(),
             method: R::METHOD.to_string(),
             params,
             id: self.request_id_counter,
-        })?;
-
-        self.io.send(&format!(
-            "Content-Length: {}\r\n\r\n{}",
-            msg.as_bytes().len(),
-            msg
-        ))?;
+        })?)?;
 
         let response: jsonrpc::Response<_> = loop {
             let response: Value = serde_json::from_str(&self.io.recv()?)?;
@@ -55,16 +49,10 @@ impl<IO: StringIO> Client<IO> {
     }
 
     pub fn notify<N: Notification>(&mut self, params: Option<N::Params>) -> Result<()> {
-        let msg = serde_json::to_string(&jsonrpc::Notification {
+        self.io.send(&serde_json::to_string(&jsonrpc::Notification {
             jsonrpc: "2.0".to_string(),
             method: N::METHOD.to_string(),
             params,
-        })?;
-
-        self.io.send(&format!(
-            "Content-Length: {}\r\n\r\n{}",
-            msg.as_bytes().len(),
-            msg
-        ))
+        })?)
     }
 }

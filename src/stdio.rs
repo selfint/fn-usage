@@ -21,6 +21,9 @@ impl StdIO {
 
 impl lsp::StringIO for StdIO {
     fn send(&mut self, msg: &str) -> Result<()> {
+        let length = msg.as_bytes().len();
+        let msg = &format!("Content-Length: {}\r\n\r\n{}", length, msg);
+
         self.stdin
             .write_all(msg.as_bytes())
             .context("writing msg to stdin")
@@ -28,23 +31,19 @@ impl lsp::StringIO for StdIO {
 
     fn recv(&mut self) -> Result<String> {
         let mut content_length = None;
-        let mut content_type = None;
 
         loop {
             let mut line = String::new();
             self.stdout
                 .read_line(&mut line)
                 .context("reading line from stdout")?;
+
             let words = line.split_ascii_whitespace().collect::<Vec<_>>();
 
-            match (words.as_slice(), &mut content_length, &mut content_type) {
-                (["Content-Length:", c_length], None, None) => {
-                    content_length = Some(c_length.parse().context("parsing Content-Length")?)
-                }
-                (["Content-Type:", c_type], Some(_), None) => {
-                    content_type = Some(c_type.to_string())
-                }
-                ([], Some(content_length), _) => {
+            match (words.as_slice(), &content_length) {
+                (["Content-Length:", c_length], None) => content_length = Some(c_length.parse()?),
+                (["Content-Type:", _], Some(_)) => {}
+                ([], Some(content_length)) => {
                     let mut content = Vec::with_capacity(*content_length);
                     let mut bytes_left = *content_length;
                     while bytes_left > 0 {
@@ -55,7 +54,6 @@ impl lsp::StringIO for StdIO {
                     let content = String::from_utf8(content).unwrap();
                     return Ok(content);
                 }
-                ([], None, None) => panic!("Unexpected server shut down"),
                 unexpected => panic!("Got unexpected stdout: {:?}", unexpected),
             };
         }

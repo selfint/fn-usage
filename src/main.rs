@@ -93,7 +93,12 @@ fn main() -> Result<()> {
 
         let symbols = client.symbols(
             uri.clone(),
-            &[SymbolKind::FUNCTION, SymbolKind::CLASS, SymbolKind::METHOD],
+            &[
+                SymbolKind::FUNCTION,
+                SymbolKind::STRUCT,
+                SymbolKind::CLASS,
+                SymbolKind::METHOD,
+            ],
         )?;
 
         for (j, symbol) in symbols.iter().enumerate() {
