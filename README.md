@@ -157,7 +157,7 @@ Example `Response` with `error`:
 
 ### Code
 
-The implementation of the `Request` and `Notification` is very simple:
+The implementation of the `Request` and `Notification` structs is very simple:
 
 ```rs
 // src/jsonrpc.rs
@@ -184,7 +184,7 @@ pub struct Notification<Params> {
 }
 ```
 
-Notice that there is no validation between ensuring the correct
+Notice that there is no validation ensuring the correct
 method/param/data types together. We will take care of that in
 the LSP-specific code later.
 
