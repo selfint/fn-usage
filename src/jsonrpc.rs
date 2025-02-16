@@ -65,11 +65,11 @@ mod tests {
         insta::assert_compact_json_snapshot!(
             Request {
                 jsonrpc: "2.0".to_string(),
-                method: "method".to_string(),
+                method: "subtract".to_string(),
                 params: Some(vec![42, 23]),
                 id: 1,
             },
-            @r###"{"jsonrpc": "2.0", "method": "method", "params": [42, 23], "id": 1}"###
+            @r#"{"jsonrpc": "2.0", "method": "subtract", "params": [42, 23], "id": 1}"#
         );
 
         // a but awkward, as Some(()) should probably just no be serialized
