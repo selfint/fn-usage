@@ -1,23 +1,23 @@
-use anyhow::Result;
+use std::io::{BufRead, Write};
+
+use anyhow::{Context, Result};
 use lsp_types::{notification::Notification, request::Request};
+use serde::Serialize;
 use serde_json::Value;
 
-use crate::jsonrpc;
+use crate::jsonrpc::{self};
 
-pub trait StringIO {
-    fn send(&mut self, msg: &str) -> Result<()>;
-    fn recv(&mut self) -> Result<String>;
-}
-
-pub struct Client<IO: StringIO> {
-    io: IO,
+pub struct Client {
+    input: Box<dyn BufRead>,
+    output: Box<dyn Write>,
     request_id_counter: i64,
 }
 
-impl<IO: StringIO> Client<IO> {
-    pub fn new(io: IO) -> Self {
+impl Client {
+    pub fn new(input: Box<dyn BufRead>, output: Box<dyn Write>) -> Self {
         Self {
-            io,
+            input,
+            output,
             request_id_counter: 0,
         }
     }
@@ -29,7 +29,7 @@ impl<IO: StringIO> Client<IO> {
             params,
         };
 
-        self.io.send(&serde_json::to_string(&notification)?)
+        self.send(&notification)
     }
 
     pub fn request<R: Request>(&mut self, params: Option<R::Params>) -> Result<R::Result> {
@@ -40,10 +40,10 @@ impl<IO: StringIO> Client<IO> {
             id: self.request_id_counter,
         };
 
-        self.io.send(&serde_json::to_string(&request)?)?;
+        self.send(&request)?;
 
         let response: jsonrpc::Response<_> = loop {
-            let response: Value = serde_json::from_str(&self.io.recv()?)?;
+            let response = self.recv()?;
 
             // check if this is our response
             if response.get("method").is_none()
@@ -58,5 +58,43 @@ impl<IO: StringIO> Client<IO> {
         self.request_id_counter += 1;
 
         response.result.into()
+    }
+
+    fn send(&mut self, msg: &impl Serialize) -> Result<()> {
+        let msg = serde_json::to_string(msg)?;
+
+        let length = msg.as_bytes().len();
+        let msg = &format!("Content-Length: {}\r\n\r\n{}", length, msg);
+
+        self.output
+            .write_all(msg.as_bytes())
+            .context("writing msg to output")
+    }
+
+    fn recv(&mut self) -> Result<Value> {
+        let mut content_length = None;
+
+        loop {
+            let mut line = String::new();
+            self.input.read_line(&mut line)?;
+
+            let words: Vec<_> = line.split_ascii_whitespace().collect();
+
+            match (words.as_slice(), &content_length) {
+                (["Content-Length:", c_length], None) => content_length = Some(c_length.parse()?),
+                (["Content-Type:", _], Some(_)) => {}
+                ([], Some(content_length)) => {
+                    let mut content = Vec::with_capacity(*content_length);
+                    let mut bytes_left = *content_length;
+                    while bytes_left > 0 {
+                        let read_bytes = self.input.read_until(b'}', &mut content)?;
+                        bytes_left -= read_bytes;
+                    }
+
+                    return serde_json::from_slice(&content).context("deserializing response");
+                }
+                unexpected => panic!("Got unexpected stdout: {:?}", unexpected),
+            };
+        }
     }
 }

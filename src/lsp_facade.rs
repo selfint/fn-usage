@@ -2,39 +2,42 @@ use anyhow::Result;
 use lsp_types::{
     notification::{DidOpenTextDocument, Initialized},
     request::{DocumentSymbolRequest, GotoDefinition, Initialize, References},
-    DocumentSymbol, DocumentSymbolResponse, GotoDefinitionResponse, ServerCapabilities, SymbolKind,
-    Url,
+    DocumentSymbol, DocumentSymbolResponse, GotoDefinitionResponse, ServerCapabilities, Url,
 };
 use serde_json::json;
 
-use crate::{Client, StringIO};
+use crate::Client;
 
-impl<IO: StringIO> Client<IO> {
-    pub fn open(&mut self, uri: Url, text: &str) -> Result<()> {
+impl Client {
+    pub fn open(&mut self, uri: &Url, text: &str) -> Result<()> {
         self.notify::<DidOpenTextDocument>(
-            serde_json::from_value(json!({
-                "textDocument": {
-                    "uri": uri,
-                    "languageId": "",
-                    "version": 1,
-                    "text": text
+            serde_json::from_value(json!(
+                {
+                    "textDocument": {
+                        "uri": uri,
+                        "languageId": "",
+                        "version": 1,
+                        "text": text
+                    }
                 }
-            }))
+            ))
             .unwrap(),
         )
     }
 
-    pub fn references(&mut self, uri: Url, symbol: &DocumentSymbol) -> Result<Vec<Url>> {
+    pub fn references(&mut self, uri: &Url, symbol: &DocumentSymbol) -> Result<Vec<Url>> {
         let references = self.request::<References>(
-            serde_json::from_value(json!({
-                "textDocument": {
-                    "uri": uri,
-                },
-                "position": symbol.selection_range.start,
-                "context": {
-                    "includeDeclaration": false
+            serde_json::from_value(json!(
+                {
+                    "textDocument": {
+                        "uri": uri,
+                    },
+                    "position": symbol.selection_range.start,
+                    "context": {
+                        "includeDeclaration": false
+                    }
                 }
-            }))
+            ))
             .unwrap(),
         )?;
 
@@ -45,14 +48,16 @@ impl<IO: StringIO> Client<IO> {
             .collect())
     }
 
-    pub fn goto_definition(&mut self, uri: Url, symbol: &DocumentSymbol) -> Result<Vec<Url>> {
+    pub fn goto_definition(&mut self, uri: &Url, symbol: &DocumentSymbol) -> Result<Vec<Url>> {
         let definition = self.request::<GotoDefinition>(
-            serde_json::from_value(json!({
-            "textDocument": {
-                "uri": uri,
-            },
-            "position": symbol.selection_range.start,
-            }))
+            serde_json::from_value(json!(
+                {
+                    "textDocument": {
+                        "uri": uri,
+                    },
+                    "position": symbol.selection_range.start,
+                }
+            ))
             .unwrap(),
         )?;
 
@@ -71,13 +76,15 @@ impl<IO: StringIO> Client<IO> {
         Ok(definition)
     }
 
-    pub fn symbols(&mut self, uri: Url, mask: &[SymbolKind]) -> Result<Vec<DocumentSymbol>> {
+    pub fn symbols(&mut self, uri: &Url) -> Result<Vec<DocumentSymbol>> {
         let symbols = self.request::<DocumentSymbolRequest>(
-            serde_json::from_value(json!({
-                "textDocument": {
-                    "uri": uri
-                },
-            }))
+            serde_json::from_value(json!(
+                {
+                    "textDocument": {
+                        "uri": uri
+                    },
+                }
+            ))
             .unwrap(),
         )?;
 
@@ -94,14 +101,7 @@ impl<IO: StringIO> Client<IO> {
                     }
                 }
 
-                if mask.len() == 0 {
-                    symbols
-                } else {
-                    symbols
-                        .into_iter()
-                        .filter(|s| mask.contains(&s.kind))
-                        .collect()
-                }
+                symbols
             }
             Some(DocumentSymbolResponse::Flat(flat)) => {
                 if flat.len() > 0 {
@@ -118,19 +118,23 @@ impl<IO: StringIO> Client<IO> {
 
     pub fn initialize(&mut self, uri: Url) -> Result<ServerCapabilities> {
         let response = self.request::<Initialize>(
-            serde_json::from_value(json!({
-                "capabilities": {
-                    "textDocument": {
-                        "documentSymbol": {
-                            "hierarchicalDocumentSymbolSupport": true,
-                        }
+            serde_json::from_value(json!(
+                {
+                    "capabilities": {
+                        "textDocument": {
+                            "documentSymbol": {
+                                "hierarchicalDocumentSymbolSupport": true,
+                            }
+                        },
                     },
-                },
-                "workspaceFolders": [{
-                    "uri": uri,
-                    "name": "name"
-                }]
-            }))
+                    "workspaceFolders": [
+                        {
+                            "uri": uri,
+                            "name": "name"
+                        }
+                    ]
+                }
+            ))
             .unwrap(),
         )?;
 

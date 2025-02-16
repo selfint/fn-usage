@@ -1,7 +1,7 @@
+mod graph;
 mod jsonrpc;
 mod lsp;
 mod lsp_facade;
-mod stdio;
 
-pub use lsp::{Client, StringIO};
-pub use stdio::StdIO;
+pub use graph::build_graph;
+pub use lsp::Client;
