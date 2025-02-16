@@ -22,7 +22,7 @@ pub struct Notification<Params> {
 pub struct Response<T: Serialize + DeserializeOwned> {
     pub jsonrpc: String,
     #[serde(flatten)]
-    #[serde(with = "JsonRpcResultRemote")]
+    #[serde(with = "JsonRpcResult")]
     pub result: Result<T, Error>,
     pub id: Option<i64>,
 }
@@ -35,11 +35,11 @@ pub struct Error {
     data: Option<Value>,
 }
 
-type JsonRpcResult<T> = Result<T, Error>;
+type JsonRpcResultRemote<T> = Result<T, Error>;
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(remote = "JsonRpcResult")]
-enum JsonRpcResultRemote<T> {
+#[serde(remote = "JsonRpcResultRemote")]
+enum JsonRpcResult<T> {
     #[serde(rename = "result")]
     Ok(T),
     #[serde(rename = "error")]
