@@ -7,15 +7,24 @@ use serde_json::{json, Value};
 use crate::Client;
 
 pub fn build_graph(client: &mut Client, root: &Url, uris: &[Url]) -> Result<Value> {
-    let mut nodes: HashSet<&str> = HashSet::new();
-    let mut edges: HashSet<(String, &str)> = HashSet::new();
+    // only use these kinds of symbols
+    let symbol_mask = [
+        SymbolKind::FUNCTION,
+        SymbolKind::STRUCT,
+        SymbolKind::CLASS,
+        SymbolKind::METHOD,
+    ];
 
     for uri in uris {
+        eprintln!("opening {}", uri.as_str());
         client.open(&uri, &std::fs::read_to_string(uri.path())?)?;
     }
 
     eprintln!("Waiting 3 seconds for LSP to index code...");
     std::thread::sleep(std::time::Duration::from_secs(3));
+
+    let mut nodes = HashSet::new();
+    let mut edges = HashSet::new();
 
     for uri in uris {
         // ignore uri not under root
@@ -25,10 +34,8 @@ pub fn build_graph(client: &mut Client, root: &Url, uris: &[Url]) -> Result<Valu
 
         nodes.insert(node);
 
-        let ignore = [SymbolKind::VARIABLE];
-
         for symbol in client.symbols(&uri)? {
-            if ignore.contains(&symbol.kind) {
+            if !symbol_mask.contains(&symbol.kind) {
                 continue;
             }
 
@@ -50,7 +57,7 @@ pub fn build_graph(client: &mut Client, root: &Url, uris: &[Url]) -> Result<Valu
                 let reference_node = reference.as_str().strip_prefix(root.as_str()).unwrap();
                 eprintln!("Found reference: {} -> {}", reference_node, node);
 
-                edges.insert((reference_node.to_string(), node));
+                edges.insert((reference_node.to_owned(), node));
             }
         }
     }

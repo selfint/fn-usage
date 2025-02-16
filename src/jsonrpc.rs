@@ -1,5 +1,4 @@
-use anyhow::anyhow;
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -20,36 +19,12 @@ pub struct Notification<Params> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Response<T> {
+pub struct Response<T: Serialize + DeserializeOwned> {
     pub jsonrpc: String,
     #[serde(flatten)]
-    pub result: JsonRpcResult<T>,
+    #[serde(with = "JsonRpcResultRemote")]
+    pub result: Result<T, Error>,
     pub id: Option<i64>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
-pub enum JsonRpcResult<T> {
-    Result(T),
-    Error {
-        code: i64,
-        message: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        data: Option<Value>,
-    },
-}
-
-impl<T> From<JsonRpcResult<T>> for anyhow::Result<T> {
-    fn from(value: JsonRpcResult<T>) -> Self {
-        match value {
-            JsonRpcResult::Result(result) => Ok(result),
-            JsonRpcResult::Error {
-                code,
-                message,
-                data,
-            } => Err(anyhow!("Error ({}) {}: {:?}", code, message, data)),
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -58,6 +33,17 @@ pub struct Error {
     message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     data: Option<Value>,
+}
+
+type JsonRpcResult<T> = Result<T, Error>;
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(remote = "JsonRpcResult")]
+enum JsonRpcResultRemote<T> {
+    #[serde(rename = "result")]
+    Ok(T),
+    #[serde(rename = "error")]
+    Err(Error),
 }
 
 impl std::fmt::Display for Error {
@@ -170,7 +156,7 @@ mod tests {
         insta::assert_compact_json_snapshot!(
             Response {
                 jsonrpc: "2.0".to_string(),
-                result: JsonRpcResult::Result(19),
+                result: Ok(19),
                 id: Some(1),
             },
             @r###"{"jsonrpc": "2.0", "result": 19, "id": 1}"###
@@ -179,11 +165,11 @@ mod tests {
         insta::assert_compact_json_snapshot!(
             Response::<()> {
                 jsonrpc: "2.0".to_string(),
-                result: JsonRpcResult::Error {
+                result: Err(Error {
                     code: -32601,
                     message: "Method not found".to_string(),
                     data: Some(json!(["Some", "data"]))
-                },
+                }),
                 id: None,
             },
             @r###"{"jsonrpc": "2.0", "error": {"code": -32601, "message": "Method not found", "data": ["Some", "data"]}, "id": null}"###
@@ -194,11 +180,11 @@ mod tests {
     fn test_response_deserialization() {
         insta::assert_debug_snapshot!(
             serde_json::from_str::<Response<i32>>(r#"{"jsonrpc": "2.0", "result": 19, "id": 1}"#),
-            @r###"
+            @r#"
         Ok(
             Response {
                 jsonrpc: "2.0",
-                result: Result(
+                result: Ok(
                     19,
                 ),
                 id: Some(
@@ -206,7 +192,7 @@ mod tests {
                 ),
             },
         )
-        "###
+        "#
         );
 
         insta::assert_debug_snapshot!(
@@ -215,16 +201,18 @@ mod tests {
         Ok(
             Response {
                 jsonrpc: "2.0",
-                result: Error {
-                    code: -32601,
-                    message: "Method not found",
-                    data: Some(
-                        Array [
-                            String("Some"),
-                            String("data"),
-                        ],
-                    ),
-                },
+                result: Err(
+                    Error {
+                        code: -32601,
+                        message: "Method not found",
+                        data: Some(
+                            Array [
+                                String("Some"),
+                                String("data"),
+                            ],
+                        ),
+                    },
+                ),
                 id: None,
             },
         )

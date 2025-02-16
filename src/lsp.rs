@@ -57,7 +57,7 @@ impl Client {
 
         self.request_id_counter += 1;
 
-        response.result.into()
+        response.result.context("getting response result")
     }
 
     fn send(&mut self, msg: &impl Serialize) -> Result<()> {
