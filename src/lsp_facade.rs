@@ -61,16 +61,13 @@ impl Client {
             .unwrap(),
         )?;
 
-        let definition = if let Some(definition) = definition {
-            match definition {
-                GotoDefinitionResponse::Scalar(location) => vec![location.uri],
-                GotoDefinitionResponse::Array(vec) => vec.into_iter().map(|l| l.uri).collect(),
-                GotoDefinitionResponse::Link(vec) => {
-                    vec.into_iter().map(|l| l.target_uri).collect()
-                }
+        let definition = match definition {
+            Some(GotoDefinitionResponse::Scalar(location)) => vec![location.uri],
+            Some(GotoDefinitionResponse::Array(vec)) => vec.into_iter().map(|l| l.uri).collect(),
+            Some(GotoDefinitionResponse::Link(vec)) => {
+                vec.into_iter().map(|l| l.target_uri).collect()
             }
-        } else {
-            vec![]
+            None => vec![],
         };
 
         Ok(definition)

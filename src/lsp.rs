@@ -85,6 +85,8 @@ impl Client {
                 (["Content-Type:", _], Some(_)) => {}
                 ([], Some(content_length)) => {
                     let mut content = Vec::with_capacity(*content_length);
+
+                    // make sure we don't seek past the current message
                     let mut bytes_left = *content_length;
                     while bytes_left > 0 {
                         let read_bytes = self.input.read_until(b'}', &mut content)?;
