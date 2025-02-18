@@ -1,5 +1,5 @@
+mod client;
+mod facade;
 mod jsonrpc;
-mod lsp;
-mod lsp_facade;
 
-pub use lsp::Client;
+pub use client::Client;
