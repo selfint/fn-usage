@@ -3,7 +3,7 @@ use lsp_types::{notification::*, request::*, *};
 use serde_json::json;
 
 impl crate::Client {
-    pub fn open(&mut self, uri: &Url, text: &str) -> Result<()> {
+    pub fn open(&mut self, uri: &Uri, text: &str) -> Result<()> {
         self.notify::<DidOpenTextDocument>(
             serde_json::from_value(json!(
                 {
@@ -19,7 +19,7 @@ impl crate::Client {
         )
     }
 
-    pub fn references(&mut self, uri: &Url, symbol: &DocumentSymbol) -> Result<Vec<Url>> {
+    pub fn references(&mut self, uri: &Uri, symbol: &DocumentSymbol) -> Result<Vec<Uri>> {
         let references = self.request::<References>(
             serde_json::from_value(json!(
                 {
@@ -43,7 +43,7 @@ impl crate::Client {
             .collect())
     }
 
-    pub fn definitions(&mut self, uri: &Url, symbol: &DocumentSymbol) -> Result<Vec<Url>> {
+    pub fn definitions(&mut self, uri: &Uri, symbol: &DocumentSymbol) -> Result<Vec<Uri>> {
         let definitions = self.request::<GotoDefinition>(
             serde_json::from_value(json!(
                 {
@@ -68,7 +68,7 @@ impl crate::Client {
         Ok(definitions)
     }
 
-    pub fn symbols(&mut self, uri: &Url) -> Result<Vec<DocumentSymbol>> {
+    pub fn symbols(&mut self, uri: &Uri) -> Result<Vec<DocumentSymbol>> {
         let symbols = self.request::<DocumentSymbolRequest>(
             serde_json::from_value(json!(
                 {
@@ -108,7 +108,7 @@ impl crate::Client {
         Ok(symbols)
     }
 
-    pub fn initialize(&mut self, uri: Url) -> Result<ServerCapabilities> {
+    pub fn initialize(&mut self, uri: Uri) -> Result<ServerCapabilities> {
         let response = self.request::<Initialize>(
             serde_json::from_value(json!(
                 {

@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use anyhow::Result;
 use indicatif::{ProgressBar, ProgressStyle};
-use lsp_types::{SymbolKind, Url};
+use lsp_types::{SymbolKind, Uri};
 use serde_json::json;
 
 use lsp_client::Client;
@@ -20,15 +20,15 @@ fn main() -> Result<()> {
 
     let (root, cmd, args) = (&args[1], &args[2], &args[3..]);
 
-    let root = Url::from_str(&root)?;
-
     // read all lines from stdin
     let project_files: HashSet<_> = std::io::stdin()
         .lock()
         .lines()
         .filter_map(Result::ok)
-        .filter_map(|line| root.join(&line).ok())
+        .filter_map(|line| Uri::from_str(&format!("{}/{}", root, line)).ok())
         .collect();
+
+    let root = Uri::from_str(&root)?;
 
     let mut child = Command::new(cmd)
         .args(args)
@@ -69,7 +69,7 @@ fn main() -> Result<()> {
     }
 
     for uri in &project_files {
-        client.open(&uri, &std::fs::read_to_string(uri.path())?)?;
+        client.open(&uri, &std::fs::read_to_string(uri.path().as_str())?)?;
     }
 
     eprintln!("     \x1b[1;32mWaiting\x1b[0m 3 seconds for LSP to index code...");

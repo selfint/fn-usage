@@ -3,7 +3,7 @@ use std::process::{Command, Stdio};
 use std::str::FromStr;
 
 use lsp_client::Client;
-use lsp_types::Url;
+use lsp_types::Uri;
 
 #[test]
 fn test_rust_analyzer() {
@@ -19,7 +19,7 @@ fn test_rust_analyzer() {
 
     let mut client = Client::new(Box::new(input), Box::new(output));
 
-    let init_resp = client.initialize(Url::from_str("file:///").unwrap());
+    let init_resp = client.initialize(Uri::from_str("file:///").unwrap());
 
     assert!(init_resp.is_ok());
 }

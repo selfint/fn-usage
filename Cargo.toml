@@ -9,10 +9,11 @@ name = "code-graph"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0.69"
-lsp-types = "0.95.1"
+anyhow = "1.0"
+indicatif = "0.17.11"
+lsp-types = "0.97.0"
 serde = { version = "1.0.154", features = ["derive"] }
-serde_json = "1.0.137"
+serde_json = "1.0"
 
 [dev-dependencies]
 insta = { version = "1.42.1", features = ["json"] }
