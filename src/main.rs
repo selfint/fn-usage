@@ -22,7 +22,7 @@ fn main() -> Result<()> {
     let root = Url::from_str(&root)?;
 
     // read all lines from stdin
-    let uris: Vec<Url> = std::io::stdin()
+    let project_files: HashSet<Url> = std::io::stdin()
         .lock()
         .lines()
         .filter_map(Result::ok)
@@ -67,7 +67,7 @@ fn main() -> Result<()> {
         panic!("Server is not 'textDocument/definition' provider");
     }
 
-    for uri in &uris {
+    for uri in &project_files {
         eprintln!("Opening {}", uri.as_str());
         client.open(&uri, &std::fs::read_to_string(uri.path())?)?;
     }
@@ -86,41 +86,36 @@ fn main() -> Result<()> {
         SymbolKind::METHOD,
     ];
 
-    for uri in &uris {
-        let node = uri.as_str().strip_prefix(root.as_str()).unwrap();
+    for file in &project_files {
+        let node = file.as_str().strip_prefix(root.as_str()).unwrap();
         nodes.insert(node);
 
-        for symbol in client.symbols(&uri)? {
+        for symbol in &client.symbols(file)? {
             if !symbol_mask.contains(&symbol.kind) {
                 continue;
             }
 
             // ignore symbols defined outside of current file
-            if !client
-                .goto_definition(&uri, &symbol)?
-                .iter()
-                .any(|d| d == uri)
-            {
+            if !client.definitions(file, symbol)?.iter().any(|d| d == file) {
                 continue;
             }
 
-            for reference in client.references(&uri, &symbol)? {
+            for reference in &client.references(file, symbol)? {
                 // ignore references outside of project files
-                if reference == *uri || !uris.contains(&reference) {
+                let Some(reference) = project_files.get(reference) else {
                     continue;
-                }
+                };
 
-                let reference_node = reference.as_str().strip_prefix(root.as_str()).unwrap();
-                eprintln!("Found reference: {} -> {}", reference_node, node);
+                let reference = reference.as_str().strip_prefix(root.as_str()).unwrap();
 
-                edges.insert((reference_node.to_owned(), node));
+                edges.insert((reference, node));
             }
         }
     }
 
     let graph = json!({
         "nodes": nodes,
-        "edges": edges
+        "edges": edges,
     });
 
     println!("{}", serde_json::to_string_pretty(&graph)?);

@@ -45,11 +45,12 @@ impl Client {
             .unwrap_or_default()
             .into_iter()
             .map(|r| r.uri)
+            .filter(|r| r != uri)
             .collect())
     }
 
-    pub fn goto_definition(&mut self, uri: &Url, symbol: &DocumentSymbol) -> Result<Vec<Url>> {
-        let definition = self.request::<GotoDefinition>(
+    pub fn definitions(&mut self, uri: &Url, symbol: &DocumentSymbol) -> Result<Vec<Url>> {
+        let definitions = self.request::<GotoDefinition>(
             serde_json::from_value(json!(
                 {
                     "textDocument": {
@@ -61,7 +62,7 @@ impl Client {
             .unwrap(),
         )?;
 
-        let definition = match definition {
+        let definitions = match definitions {
             Some(GotoDefinitionResponse::Scalar(location)) => vec![location.uri],
             Some(GotoDefinitionResponse::Array(vec)) => vec.into_iter().map(|l| l.uri).collect(),
             Some(GotoDefinitionResponse::Link(vec)) => {
@@ -70,7 +71,7 @@ impl Client {
             None => vec![],
         };
 
-        Ok(definition)
+        Ok(definitions)
     }
 
     pub fn symbols(&mut self, uri: &Url) -> Result<Vec<DocumentSymbol>> {

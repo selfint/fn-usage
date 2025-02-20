@@ -35,10 +35,10 @@ pub struct Error {
     data: Option<Value>,
 }
 
-type JsonRpcResultRemote<T> = Result<T, Error>;
+type Remote<T> = Result<T, Error>;
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(remote = "JsonRpcResultRemote")]
+#[serde(remote = "Remote")]
 enum JsonRpcResult<T> {
     #[serde(rename = "result")]
     Ok(T),
