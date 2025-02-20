@@ -30,6 +30,7 @@ fn main() -> Result<()> {
 
     let root = Uri::from_str(&root)?;
 
+    eprintln!("     \x1b[1;32mRunning\x1b[0m `{} {}`", cmd, args.join(" "));
     let mut child = Command::new(cmd)
         .args(args)
         .stdin(Stdio::piped())
@@ -68,6 +69,7 @@ fn main() -> Result<()> {
         panic!("Server is not 'textDocument/definition' provider");
     }
 
+    eprintln!("    \x1b[1;32mIndexing\x1b[0m {}", root.as_str());
     for uri in &project_files {
         client.open(&uri, &std::fs::read_to_string(uri.path().as_str())?)?;
     }
@@ -88,7 +90,7 @@ fn main() -> Result<()> {
 
     let bar = ProgressBar::new(project_files.len() as u64).with_style(
         ProgressStyle::with_template(
-            "    \x1b[1;36mScanning \x1b[0m ({eta}) [{bar:20}] {pos:>5}/{len}: {wide_msg:!}",
+            "    \x1b[1;36mScanning\x1b[0m [{bar:27}] ({eta}) {pos}/{len}: {wide_msg:!}",
         )
         .unwrap()
         .progress_chars("=> "),
