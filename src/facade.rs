@@ -1,14 +1,8 @@
 use anyhow::Result;
-use lsp_types::{
-    notification::{DidOpenTextDocument, Initialized},
-    request::{DocumentSymbolRequest, GotoDefinition, Initialize, References},
-    DocumentSymbol, DocumentSymbolResponse, GotoDefinitionResponse, ServerCapabilities, Url,
-};
+use lsp_types::{notification::*, request::*, *};
 use serde_json::json;
 
-use crate::Client;
-
-impl Client {
+impl crate::Client {
     pub fn open(&mut self, uri: &Url, text: &str) -> Result<()> {
         self.notify::<DidOpenTextDocument>(
             serde_json::from_value(json!(

@@ -4,10 +4,11 @@ use std::process::{Command, Stdio};
 use std::str::FromStr;
 
 use anyhow::Result;
+use indicatif::{ProgressBar, ProgressStyle};
 use lsp_types::{SymbolKind, Url};
+use serde_json::json;
 
 use lsp_client::Client;
-use serde_json::json;
 
 fn main() -> Result<()> {
     let args: Vec<_> = std::env::args().collect();
@@ -22,7 +23,7 @@ fn main() -> Result<()> {
     let root = Url::from_str(&root)?;
 
     // read all lines from stdin
-    let project_files: HashSet<Url> = std::io::stdin()
+    let project_files: HashSet<_> = std::io::stdin()
         .lock()
         .lines()
         .filter_map(Result::ok)
@@ -68,11 +69,10 @@ fn main() -> Result<()> {
     }
 
     for uri in &project_files {
-        eprintln!("Opening {}", uri.as_str());
         client.open(&uri, &std::fs::read_to_string(uri.path())?)?;
     }
 
-    eprintln!("Waiting 3 seconds for LSP to index code...");
+    eprintln!("     \x1b[1;32mWaiting\x1b[0m 3 seconds for LSP to index code...");
     std::thread::sleep(std::time::Duration::from_secs(3));
 
     let mut nodes = HashSet::new();
@@ -86,14 +86,27 @@ fn main() -> Result<()> {
         SymbolKind::METHOD,
     ];
 
+    let bar = ProgressBar::new(project_files.len() as u64).with_style(
+        ProgressStyle::with_template(
+            "    \x1b[1;36mScanning \x1b[0m ({eta}) [{bar:20}] {pos:>5}/{len}: {wide_msg:!}",
+        )
+        .unwrap()
+        .progress_chars("=> "),
+    );
+
     for file in &project_files {
         let node = file.as_str().strip_prefix(root.as_str()).unwrap();
         nodes.insert(node);
+
+        bar.println(format!("     \x1b[1;32mScanned\x1b[0m {}", node));
+        bar.inc(1);
 
         for symbol in &client.symbols(file)? {
             if !symbol_mask.contains(&symbol.kind) {
                 continue;
             }
+
+            bar.set_message(format!("{:?} {}", symbol.kind, symbol.name));
 
             // ignore symbols defined outside of current file
             if !client.definitions(file, symbol)?.iter().any(|d| d == file) {
@@ -112,6 +125,8 @@ fn main() -> Result<()> {
             }
         }
     }
+
+    bar.finish();
 
     let graph = json!({
         "nodes": nodes,
