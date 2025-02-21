@@ -5,7 +5,7 @@ use lsp_types::{notification::Notification, request::Request};
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::jsonrpc::{self};
+use crate::jsonrpc;
 
 pub struct Client {
     input: Box<dyn BufRead>,

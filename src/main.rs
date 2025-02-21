@@ -69,9 +69,10 @@ fn main() -> Result<()> {
         panic!("Server is not 'textDocument/definition' provider");
     }
 
-    eprintln!("    \x1b[1;32mIndexing\x1b[0m {}", root.as_str());
     for file in &project_files {
-        client.open(&file, &std::fs::read_to_string(file.path().as_str())?)?;
+        eprintln!("    \x1b[1;32mIndexing\x1b[0m {}", file.as_str());
+
+        client.open(file, &std::fs::read_to_string(file.path().as_str())?)?;
     }
 
     eprintln!("     \x1b[1;32mWaiting\x1b[0m For LSP server to index code...");
