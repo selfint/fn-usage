@@ -40,6 +40,10 @@ def generate_color(index: int):
 
 def generate_dot(data):
     nodes = data["nodes"]
+    edges = data["edges"]
+
+    nodes = [n for n in nodes if any(s == n or e == n for s, e in edges)]
+
     clusters = build_clusters(nodes)
 
     dot = [
@@ -92,15 +96,15 @@ def generate_dot(data):
 
     # Add edges with lhead/ltail for cross-cluster connections
     for from_node, to_node in data["edges"]:
-        from_cluster = get_cluster(from_node)
-        to_cluster = get_cluster(to_node)
+        tail = get_cluster(from_node)
+        head = get_cluster(to_node)
 
         edge_attrs = []
-        if from_cluster != to_cluster:
-            if to_cluster:
-                edge_attrs.append(f'lhead="cluster_{to_cluster}"')
-            if from_cluster:
-                edge_attrs.append(f'ltail="cluster_{from_cluster}"')
+        if tail != head:
+            if head:
+                edge_attrs.append(f'lhead="cluster_{head}"')
+            if tail:
+                edge_attrs.append(f'ltail="cluster_{tail}"')
 
         edge_key = ", ".join(edge_attrs)
 
