@@ -4,7 +4,7 @@ use std::process::{Command, Stdio};
 use std::str::FromStr;
 
 use anyhow::Result;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{HumanDuration, ProgressBar, ProgressStyle};
 use lsp_types::{SymbolKind, Uri};
 use serde_json::json;
 
@@ -70,12 +70,12 @@ fn main() -> Result<()> {
     }
 
     eprintln!("    \x1b[1;32mIndexing\x1b[0m {}", root.as_str());
-    for uri in &project_files {
-        client.open(&uri, &std::fs::read_to_string(uri.path().as_str())?)?;
+    for file in &project_files {
+        client.open(&file, &std::fs::read_to_string(file.path().as_str())?)?;
     }
 
-    eprintln!("     \x1b[1;32mWaiting\x1b[0m 3 seconds for LSP to index code...");
-    std::thread::sleep(std::time::Duration::from_secs(3));
+    eprintln!("     \x1b[1;32mWaiting\x1b[0m For LSP server to index code...");
+    std::thread::sleep(std::time::Duration::from_secs(5));
 
     let mut nodes = HashSet::new();
     let mut edges = HashSet::new();
@@ -128,7 +128,11 @@ fn main() -> Result<()> {
         }
     }
 
-    bar.finish();
+    bar.println(format!(
+        "    \x1b[1;32mFinished\x1b[0m in {}",
+        HumanDuration(bar.duration())
+    ));
+    bar.finish_and_clear();
 
     let graph = json!({
         "nodes": nodes,
